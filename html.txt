@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subir y borrar archivos</title>
+</head>
+<body>
+    <h2>Subir imágenes y videos</h2>
+
+    <!-- Formulario para subir varios archivos -->
+    <form action="/upload" method="POST" enctype="multipart/form-data">
+        <input type="file" name="archivos" accept="image/*,video/*" multiple>
+        <button type="submit">Subir</button>
+    </form>
+
+    <hr>
+
+    <!-- Mostrar archivos subidos -->
+    {% if filenames %}
+        <h3>Archivos subidos:</h3>
+        <ul>
+        {% for file in filenames %}
+            <li>
+                {% if file.endswith('.mp4') or file.endswith('.avi') or file.endswith('.mov') %}
+                    <video controls width="300">
+                        <source src="{{ url_for('static', filename='uploads/' + file) }}" type="video/mp4">
+                        Tu navegador no soporta video.
+                    </video>
+                {% else %}
+                    <img src="{{ url_for('static', filename='uploads/' + file) }}" width="300">
+                {% endif %}
+
+                <!-- Botón para eliminar -->
+                <form action="{{ url_for('delete_file', filename=file) }}" method="POST" style="display:inline;">
+                    <button type="submit">Eliminar</button>
+                </form>
+            </li>
+        {% endfor %}
+        </ul>
+    {% endif %}
+</body>
+</html>

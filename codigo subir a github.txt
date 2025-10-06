@@ -1,0 +1,8 @@
+# 1. Prepara los archivos modificados
+git add .
+
+# 2. Guarda los cambios con un nuevo mensaje
+git commit -m "Añadí una nueva función"
+
+# 3. Sube los cambios
+git push

@@ -1,0 +1,40 @@
+# ----------- 05/10/2025
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Viendo: {{ filename }}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body, html { height: 100%; margin: 0; }
+    .fullscreen-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+      background-color: #212529;
+      padding: 1rem;
+    }
+    .fullscreen-media {
+      max-width: 95%;
+      max-height: 95%;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+<div class="fullscreen-container">
+  {% set ext = filename.rsplit('.',1)[1].lower() if '.' in filename else '' %}
+  {% if ext in ['mp4','avi','mov','webm'] %}
+    <video controls autoplay class="fullscreen-media">
+      <source src="{{ url_for('static', filename='uploads/' + filename) }}" type="video/mp4">
+      Tu navegador no soporta video.
+    </video>
+  {% else %}
+    <img src="{{ url_for('static', filename='uploads/' + filename) }}" class="fullscreen-media" alt="{{ filename }}">
+  {% endif %}
+</div>
+<a href="{{ url_for('index') }}" class="btn btn-light position-absolute top-0 start-0 m-3">Volver</a>
+</body>
+</html>

@@ -1,47 +1,169 @@
+# -------------- 05/10/2025
 import os
-from flask import Flask, render_template, request, redirect, url_for
+import time
+from flask import Flask, render_template, request, redirect, url_for, abort, flash, send_from_directory
+from werkzeug.utils import secure_filename
+import cv2  # NUEVO: Importamos OpenCV
+import numpy as np # NUEVO: Importamos NumPy
 
 app = Flask(__name__)
 
+# --- CONFIGURACIÓN ---
 UPLOAD_FOLDER = 'static/uploads'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'} # NUEVO: Limitamos solo a imágenes por ahora
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.secret_key = 'tu_llave_secreta_aqui' 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
+# --- FUNCIONES AUXILIARES ---
+def allowed_file(filename):
+    """Verifica si la extensión de un archivo es válida."""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def list_uploaded_files():
+    """Lee la carpeta y devuelve una lista de archivos permitidos."""
+    if not os.path.isdir(app.config['UPLOAD_FOLDER']):
+        return []
+    # NUEVO: Filtramos para no mostrar las versiones mejoradas en la galería principal
+    files = [f for f in os.listdir(app.config['UPLOAD_FOLDER']) if allowed_file(f) and not f.startswith('enhanced_')]
+    files.sort()
+    return files
+
+# NUEVO: Función para mejorar la imagen con OpenCV
+def enhance_image(input_path, output_path):
+    """
+    Aplica el filtro de mejora a una imagen y la guarda.
+    """
+    imagen = cv2.imread(input_path)
+    if imagen is None:
+        return False
+
+    # 1. Convertir a espacio de color LAB
+    imagen_lab = cv2.cvtColor(imagen, cv2.COLOR_BGR2LAB)
+    l_channel, a_channel, b_channel = cv2.split(imagen_lab)
+
+    # 2. Aplicar CLAHE al canal de Luminosidad (L)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    l_channel_clahe = clahe.apply(l_channel)
+
+    # 3. Unir canales y convertir de vuelta a BGR
+    imagen_lab_mejorada = cv2.merge((l_channel_clahe, a_channel, b_channel))
+    imagen_final = cv2.cvtColor(imagen_lab_mejorada, cv2.COLOR_LAB2BGR)
+
+    # 4. (Opcional) Aumento de Nitidez
+    kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
+    imagen_final = cv2.filter2D(imagen_final, -1, kernel)
+    
+    # 5. Guardar la imagen procesada
+    cv2.imwrite(output_path, imagen_final)
+    return True
+
+
+# --- RUTAS DE LA APLICACIÓN ---
+
 @app.route('/')
 def index():
-    return render_template('index.html')
+    filenames = list_uploaded_files()
+    return render_template('index.html', filenames=filenames)
 
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
     if 'archivos' not in request.files:
-        return "No se enviaron archivos"
+        flash('No se seleccionó ningún archivo para subir.', 'warning')
+        return redirect(url_for('index'))
 
     files = request.files.getlist('archivos')
-    saved_files = []
-
     for file in files:
-        if file.filename != '':
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-            file.save(filepath)
-            saved_files.append(file.filename)
+        if file and file.filename != '':
+            if allowed_file(file.filename):
+                filename = secure_filename(file.filename)
+                filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                file.save(filepath)
+            else:
+                flash(f"El archivo '{secure_filename(file.filename)}' tiene una extensión no permitida.", 'danger')
 
-    return render_template('index.html', filenames=saved_files)
+    return redirect(url_for('index'))
+
+# NUEVO: Ruta para procesar la imagen
+@app.route('/enhance/<filename>')
+def enhance_file_route(filename):
+    # Aseguramos los nombres de archivo
+    original_secure = secure_filename(filename)
+    enhanced_filename = "enhanced_" + original_secure
+
+    # Definimos las rutas de entrada y salida
+    input_path = os.path.join(app.config['UPLOAD_FOLDER'], original_secure)
+    output_path = os.path.join(app.config['UPLOAD_FOLDER'], enhanced_filename)
+
+    # Verificamos que el archivo original exista
+    if not os.path.exists(input_path):
+        abort(404)
+
+    # Llamamos a nuestra función de OpenCV
+    success = enhance_image(input_path, output_path)
+    
+    if success:
+        # Si todo sale bien, mostramos la página de resultados
+        return render_template('result.html', original_filename=original_secure, enhanced_filename=enhanced_filename)
+    else:
+        # Si hay un error, lo notificamos y volvemos al inicio
+        flash('No se pudo procesar la imagen.', 'danger')
+        return redirect(url_for('index'))
 
 
 @app.route('/delete/<filename>', methods=['POST'])
 def delete_file(filename):
+    filename = secure_filename(filename)
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    
+    # NUEVO: También eliminamos la versión mejorada si existe
+    enhanced_filepath = os.path.join(app.config['UPLOAD_FOLDER'], "enhanced_" + filename)
+    
     if os.path.exists(filepath):
-        os.remove(filepath)
+        try:
+            os.remove(filepath)
+            if os.path.exists(enhanced_filepath):
+                os.remove(enhanced_filepath)
+        except Exception as e:
+            print(f"Error al eliminar {filename}: {e}")
+    
     return redirect(url_for('index'))
 
 
-@app.route('/uploads/<filename>')
-def uploaded_file(filename):
-    return redirect(url_for('static', filename=f'uploads/{filename}'))
+@app.route('/delete_all', methods=['POST'])
+def delete_all_files():
+    folder_path = app.config['UPLOAD_FOLDER']
+    # NUEVO: Ahora borra todos los archivos de la carpeta
+    for filename in os.listdir(folder_path):
+        filepath = os.path.join(folder_path, filename)
+        try:
+            os.remove(filepath)
+        except Exception as e:
+            print(f"No se pudo borrar el archivo {filepath}: {e}")
+    flash('Todos los archivos han sido eliminados.', 'success')
+    return redirect(url_for('index'))
 
 
+@app.route('/view/<filename>')
+def view_file(filename):
+    filename = secure_filename(filename)
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    if not os.path.exists(filepath): # No necesitamos allowed_file aquí, ya que mostramos originales y mejoradas
+        abort(404)
+    return render_template('view.html', filename=filename)
+
+
+# --- CÓDIGO ANTI-CACHÉ ---
+@app.after_request
+def add_header(response):
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
+
+# --- ARRANQUE DE LA APLICACIÓN ---
 if __name__ == '__main__':
     app.run(debug=True)

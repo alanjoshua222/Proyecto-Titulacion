@@ -9,19 +9,32 @@
 <body class="bg-dark text-white">
 <div class="container-fluid py-4">
   <h1 class="text-center mb-4">Comparación de Imagen</h1>
+
   <div class="row">
+    
     <div class="col-md-6 text-center">
       <h3>Original</h3>
       <img src="{{ url_for('static', filename='uploads/' + original_filename) }}" class="img-fluid rounded" alt="Original">
     </div>
+    
     <div class="col-md-6 text-center">
       <h3>Mejorada</h3>
       <img src="{{ url_for('static', filename='uploads/' + enhanced_filename) }}" class="img-fluid rounded" alt="Mejorada">
     </div>
-  </div>
-  <div class="text-center mt-4">
+
+  </div> <div class="text-center mt-4 d-flex justify-content-center gap-2">
+    
+    {% if prev_filename %}
+      <a href="{{ url_for('enhance_file_route', filename=prev_filename) }}" class="btn btn-secondary">&lt; Anterior</a>
+    {% endif %}
+
     <a href="{{ url_for('index') }}" class="btn btn-light">Volver a la Galería</a>
+
+    {% if next_filename %}
+      <a href="{{ url_for('enhance_file_route', filename=next_filename) }}" class="btn btn-secondary">Siguiente &gt;</a>
+    {% endif %}
   </div>
+
 </div>
 </body>
 </html>

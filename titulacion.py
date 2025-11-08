@@ -122,11 +122,26 @@ def enhance_file_route(filename):
     enhanced_filename = "enhanced_" + filename
     input_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     output_path = os.path.join(app.config['UPLOAD_FOLDER'], enhanced_filename)
+    filenames = list_uploaded_files()
+    prev_filename = None
+    next_filename = None
+    try:
+        current_index= filenames.index(filename)
+        if len(filename) > 1:
+            prev_index = (current_index - 1) % len(filenames)
+            next_index = (current_index + 1) % len(filenames)
+            prev_filename = filenames[prev_index]
+            next_filename = filenames[next_index]
+        else:
+            flash('No se pudo procesar la imagen', 'danger')
+            return redirect(url_for('index'))
+    except ValueError:
+        abort(404)
     if not os.path.exists(input_path):
         abort(404)
     success = enhance_image(input_path, output_path)
     if success:
-        return render_template('result.html', original_filename=filename, enhanced_filename=enhanced_filename)
+        return render_template('result.html', original_filename=filename, enhanced_filename=enhanced_filename, prev_filename=prev_filename, next_filename=next_filename)
     else:
         flash('No se pudo procesar la imagen.', 'danger')
         return redirect(url_for('index'))
@@ -197,7 +212,19 @@ def view_file(filename):
     filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     if not os.path.exists(filepath):
         abort(404)
-    return render_template('view.html', filename=filename)
+    filenames = list_uploaded_files()
+    prev_filename = None
+    next_filename = None
+    try:
+        current_index = filenames.index(filename)
+        if len(filenames) > 1:
+            prev_index = (current_index - 1) % len(filenames)
+            next_index = (current_index + 1) % len(filenames)
+            prev_filename = filenames[prev_index]
+            next_filename = filenames[next_index]
+    except ValueError:
+        pass
+    return render_template('view.html', filename=filename, prev_filename=prev_filename, next_filename=next_filename)
 
 @app.after_request
 def add_header(response):

@@ -22,7 +22,15 @@
       <img src="{{ url_for('static', filename='uploads/' + enhanced_filename) }}" class="img-fluid rounded" alt="Mejorada">
     </div>
 
-  </div> <div class="text-center mt-4 d-flex justify-content-center gap-2">
+  </div> 
+ <div class="row mt-4">
+    <div class="col text-center">
+        <h2>Resultado Cuantitativo</h2>
+        <h4 class="text-info">Área de Placa Detectada: <strong>{{ "%.2f"|format(plaque_area) }}</strong> píxeles</h4>
+        <p class="text-muted">(Valor objetivo para análisis)</p>
+    </div>
+  </div>
+  <div class="text-center mt-4 d-flex justify-content-center gap-2">
     
     {% if prev_filename %}
       <a href="{{ url_for('enhance_file_route', filename=prev_filename) }}" class="btn btn-secondary">&lt; Anterior</a>

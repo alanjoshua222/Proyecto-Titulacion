@@ -69,17 +69,25 @@ def enhance_image(input_path, output_path):
     """Aplica el filtro de mejora a una imagen y la guarda."""
     # (El resto de esta función no cambia)
     imagen = cv2.imread(input_path)
-    if imagen is None: return False
+    if imagen is None: return False, 0
     imagen_lab = cv2.cvtColor(imagen, cv2.COLOR_BGR2LAB)
     l_channel, a_channel, b_channel = cv2.split(imagen_lab)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     l_channel_clahe = clahe.apply(l_channel)
     imagen_lab_mejorada = cv2.merge((l_channel_clahe, a_channel, b_channel))
     imagen_final = cv2.cvtColor(imagen_lab_mejorada, cv2.COLOR_LAB2BGR)
-    kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
-    imagen_final = cv2.filter2D(imagen_final, -1, kernel)
+    hsv = cv2.cvtColor(imagen_final,cv2.COLOR_BGR2HSV)
+    lower_color = np.array([20,50,80])
+    upper_color = np.array([35,255,220])
+    mask = cv2.inRange(hsv, lower_color , upper_color)
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    total_plaque_area = 0
+    for c in contours:
+        total_plaque_area += cv2.contourArea(c)
+    print(f"Área de la placa detectada: {total_plaque_area} pixeles")
+    cv2.drawContours(imagen_final, contours, -1,(255,255,2), 2)
     cv2.imwrite(output_path, imagen_final)
-    return True
+    return True, total_plaque_area
 
 # --- RUTAS DE LA APLICACIÓN ---
 
@@ -127,21 +135,18 @@ def enhance_file_route(filename):
     next_filename = None
     try:
         current_index= filenames.index(filename)
-        if len(filename) > 1:
+        if len(filenames) > 1:
             prev_index = (current_index - 1) % len(filenames)
             next_index = (current_index + 1) % len(filenames)
             prev_filename = filenames[prev_index]
             next_filename = filenames[next_index]
-        else:
-            flash('No se pudo procesar la imagen', 'danger')
-            return redirect(url_for('index'))
     except ValueError:
         abort(404)
     if not os.path.exists(input_path):
         abort(404)
-    success = enhance_image(input_path, output_path)
+    success,plaque_area = enhance_image(input_path, output_path)
     if success:
-        return render_template('result.html', original_filename=filename, enhanced_filename=enhanced_filename, prev_filename=prev_filename, next_filename=next_filename)
+        return render_template('result.html', original_filename=filename, enhanced_filename=enhanced_filename, prev_filename=prev_filename, next_filename=next_filename, plaque_area=plaque_area)
     else:
         flash('No se pudo procesar la imagen.', 'danger')
         return redirect(url_for('index'))

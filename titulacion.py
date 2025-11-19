@@ -1,10 +1,10 @@
 import os
 import time
-from flask import Flask, render_template, request, redirect, url_for, abort, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, abort, flash, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
 import cv2
 import numpy as np
-import shutil # NUEVO: Importamos la librería para copiar archivos
+import shutil 
 
 app = Flask(__name__)
 
@@ -20,6 +20,24 @@ os.makedirs(LOCAL_SOURCE_FOLDER, exist_ok=True) # NUEVO: Nos aseguramos que la c
 DELETED_DURING_SESSION = set()
 
 # --- FUNCIONES AUXILIARES ---
+def get_turesky_grade(plaque_area, tooth_area):
+    if tooth_area == 0:
+        return 0, 0.0
+    percentage = (plaque_area / tooth_area) * 100
+    grade = 0
+    if percentage == 0:
+        grade = 0
+    elif percentage < 10:
+        grade = 1
+    elif percentage < 20:
+        grade = 2
+    elif percentage < 33.3:
+        grade = 3
+    elif percentage < 66.6:
+        grade = 4
+    else:
+        grade = 5
+    return grade, percentage
 def allowed_file(filename):
     """Verifica si la extensión de un archivo es válida."""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -66,28 +84,111 @@ def sync_local_folder():
     return new_files_count
 
 def enhance_image(input_path, output_path):
-    """Aplica el filtro de mejora a una imagen y la guarda."""
-    # (El resto de esta función no cambia)
+    """
+    Versión 8.0: Detección por MÁSCARA DE COLOR ESPECÍFICA (Diente)
+    y selección del objeto CENTRAL.
+    """
     imagen = cv2.imread(input_path)
-    if imagen is None: return False, 0
+    if imagen is None: return False, 0, 0
+
+    # --- 1. MEJORA DE ILUMINACIÓN ---
     imagen_lab = cv2.cvtColor(imagen, cv2.COLOR_BGR2LAB)
     l_channel, a_channel, b_channel = cv2.split(imagen_lab)
     clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
     l_channel_clahe = clahe.apply(l_channel)
     imagen_lab_mejorada = cv2.merge((l_channel_clahe, a_channel, b_channel))
     imagen_final = cv2.cvtColor(imagen_lab_mejorada, cv2.COLOR_LAB2BGR)
-    hsv = cv2.cvtColor(imagen_final,cv2.COLOR_BGR2HSV)
-    lower_color = np.array([20,50,80])
-    upper_color = np.array([35,255,220])
-    mask = cv2.inRange(hsv, lower_color , upper_color)
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    # ==========================================
+    # --- 2. DETECCIÓN DEL DIENTE (NUEVA ESTRATEGIA) ---
+    # ==========================================
+    
+    # Convertir a HSV
+    hsv = cv2.cvtColor(imagen_final, cv2.COLOR_BGR2HSV)
+    
+    # ESTRATEGIA: El diente es Brillante (V alto) y poco Saturado (S bajo)
+    # La encía es oscura (V bajo) y muy saturada (S alto)
+    
+    # Rango para "Materia Dental" (Blanco/Amarillento brillante)
+    # H: 0-179 (Cualquier tono, aunque suele ser amarillo/naranja)
+    # S: 0-100 (Saturación BAJA - esto elimina la encía roja intensa)
+    # V: 60-255 (Brillo MEDIO/ALTO - esto elimina el fondo oscuro)
+    lower_tooth = np.array([0, 0, 80])     
+    upper_tooth = np.array([180, 120, 255]) 
+    
+    # Crear máscara
+    mask_tooth = cv2.inRange(hsv, lower_tooth, upper_tooth)
+    
+    # Limpieza fuerte para eliminar puntos sueltos
+    kernel = np.ones((7,7), np.uint8)
+    mask_tooth = cv2.morphologyEx(mask_tooth, cv2.MORPH_OPEN, kernel, iterations=2)
+    mask_tooth = cv2.morphologyEx(mask_tooth, cv2.MORPH_CLOSE, kernel, iterations=2)
+
+    # Encontrar contornos
+    contours_tooth, _ = cv2.findContours(mask_tooth, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    total_tooth_area = 0
+    
+    # --- SELECCIÓN DEL DIENTE CENTRAL ---
+    if contours_tooth:
+        # Centro de la imagen
+        height, width = imagen.shape[:2]
+        center_x, center_y = width // 2, height // 2
+        
+        best_contour = None
+        min_dist = float('inf')
+        
+        # Filtramos contornos muy pequeños (ruido)
+        min_area = 2000 
+        
+        for c in contours_tooth:
+            area = cv2.contourArea(c)
+            if area > min_area:
+                # Calcular centro del contorno
+                M = cv2.moments(c)
+                if M["m00"] != 0:
+                    cX = int(M["m10"] / M["m00"])
+                    cY = int(M["m01"] / M["m00"])
+                    
+                    # Distancia al centro de la foto
+                    dist = np.sqrt((cX - center_x)**2 + (cY - center_y)**2)
+                    
+                    if dist < min_dist:
+                        min_dist = dist
+                        best_contour = c
+        
+        # Si encontramos un diente central...
+        if best_contour is not None:
+            total_tooth_area = cv2.contourArea(best_contour)
+            
+            # Usamos Convex Hull SOLO en este diente para que quede suave y "redondito"
+            hull = cv2.convexHull(best_contour)
+            
+            # Dibujamos en ROJO
+            cv2.drawContours(imagen_final, [hull], -1, (0, 0, 255), 3)
+
+    print(f"Área de diente detectada: {total_tooth_area} píxeles")
+
+    # ==========================================
+    # --- 3. DETECCIÓN DE PLACA (HSV) ---
+    # ==========================================
+    # Rango para la Placa (Fluorescencia)
+    lower_plaque = np.array([20, 50, 80])
+    upper_plaque = np.array([35, 255, 220]) 
+    mask_plaque = cv2.inRange(hsv, lower_plaque, upper_plaque)
+    
+    contours_plaque, _ = cv2.findContours(mask_plaque, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
     total_plaque_area = 0
-    for c in contours:
+    for c in contours_plaque:
         total_plaque_area += cv2.contourArea(c)
-    print(f"Área de la placa detectada: {total_plaque_area} pixeles")
-    cv2.drawContours(imagen_final, contours, -1,(255,255,2), 2)
+        
+    # Dibujamos contornos de placa en CIAN
+    cv2.drawContours(imagen_final, contours_plaque, -1, (255, 255, 0), 2)
+
     cv2.imwrite(output_path, imagen_final)
-    return True, total_plaque_area
+    
+    return True, total_plaque_area, total_tooth_area
 
 # --- RUTAS DE LA APLICACIÓN ---
 
@@ -125,6 +226,10 @@ def upload_file():
                 flash(f"El archivo '{secure_filename(file.filename)}' tiene una extensión no permitida.", 'danger')
     return redirect(url_for('index'))
 
+@app.route('/download/<filename>')
+def download_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
+
 @app.route('/enhance/<path:filename>')
 def enhance_file_route(filename):
     enhanced_filename = "enhanced_" + filename
@@ -144,9 +249,10 @@ def enhance_file_route(filename):
         abort(404)
     if not os.path.exists(input_path):
         abort(404)
-    success,plaque_area = enhance_image(input_path, output_path)
+    success,plaque_area, tooth_area = enhance_image(input_path, output_path)
     if success:
-        return render_template('result.html', original_filename=filename, enhanced_filename=enhanced_filename, prev_filename=prev_filename, next_filename=next_filename, plaque_area=plaque_area)
+        turesky_grade, plaque_percentage = get_turesky_grade(plaque_area, tooth_area)
+        return render_template('result.html', original_filename=filename, enhanced_filename=enhanced_filename, prev_filename=prev_filename, next_filename=next_filename,tooth_area=tooth_area, plaque_area=plaque_area, plaque_percentage=plaque_percentage, turesky_grade=turesky_grade)
     else:
         flash('No se pudo procesar la imagen.', 'danger')
         return redirect(url_for('index'))
@@ -240,4 +346,6 @@ def add_header(response):
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0')
+
+   

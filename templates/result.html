@@ -11,32 +11,51 @@
   <h1 class="text-center mb-4">Comparación de Imagen</h1>
 
   <div class="row">
-    
     <div class="col-md-6 text-center">
       <h3>Original</h3>
       <img src="{{ url_for('static', filename='uploads/' + original_filename) }}" class="img-fluid rounded" alt="Original">
     </div>
-    
     <div class="col-md-6 text-center">
       <h3>Mejorada</h3>
       <img src="{{ url_for('static', filename='uploads/' + enhanced_filename) }}" class="img-fluid rounded" alt="Mejorada">
     </div>
-
   </div> 
- <div class="row mt-4">
-    <div class="col text-center">
-        <h2>Resultado Cuantitativo</h2>
-        <h4 class="text-info">Área de Placa Detectada: <strong>{{ "%.2f"|format(plaque_area) }}</strong> píxeles</h4>
-        <p class="text-muted">(Valor objetivo para análisis)</p>
+
+  <div class="row mt-4 pt-4 border-top border-secondary">
+    <div class="col-12 text-center">
+        <h2>Resultados Cuantitativos</h2>
     </div>
   </div>
-  <div class="text-center mt-4 d-flex justify-content-center gap-2">
+
+  <div class="row mt-3">
+    <div class="col-md-6">
+        <div class="card bg-secondary text-white p-3 h-100">
+            <h5 class="text-info">Datos de Segmentación (Píxeles)</h5>
+            <hr>
+            <p class="mb-1"><strong>Área de Placa Detectada:</strong> {{ "%.0f"|format(plaque_area) }} px</p>
+            <p class="mb-0"><strong>Área de Diente Detectada:</strong> {{ "%.0f"|format(tooth_area) }} px</p>
+        </div>
+    </div>
     
+    <div class="col-md-6">
+        <div class="card bg-secondary text-white p-3 h-100">
+            <h5 class="text-warning">Índice Quigley-Hein (Turesky)</h5>
+            <hr>
+            <p class="mb-1"><strong>Porcentaje de Placa:</strong> {{ "%.2f"|format(plaque_percentage) }} %</p>
+            <p class="mb-0"><strong>Grado Asignado (0-5):</strong> 
+                <strong class="display-6 text-warning">{{ turesky_grade }}</strong>
+            </p>
+        </div>
+    </div>
+  </div>
+  <div class="text-center mt-4 pt-4 border-top border-secondary">
     {% if prev_filename %}
       <a href="{{ url_for('enhance_file_route', filename=prev_filename) }}" class="btn btn-secondary">&lt; Anterior</a>
     {% endif %}
 
     <a href="{{ url_for('index') }}" class="btn btn-light">Volver a la Galería</a>
+
+    <a href="{{ url_for('download_file', filename=enhanced_filename) }}" class="btn btn-primary fw-bold">Descargar Imagen</a>
 
     {% if next_filename %}
       <a href="{{ url_for('enhance_file_route', filename=next_filename) }}" class="btn btn-secondary">Siguiente &gt;</a>

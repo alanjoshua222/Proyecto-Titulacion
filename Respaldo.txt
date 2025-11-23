@@ -116,35 +116,26 @@ class DentalAnalyzerApp:
         self.create_tooth_mask(self.original_cv_image)
 
     def create_tooth_mask(self, img):
-        # 1. Lógica de Detección (Tu código)
-        blurred = cv2.GaussianBlur(img, (5,5), 0)
-        hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
+        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        H, S, V = cv2.split(hsv)
 
-        lower_tooth = np.array([0,0,60])
-        upper_tooth = np.array([180,130,255])
+        s_inverted = 255 - S
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+        s_enhanced = clahe.apply(s_inverted)
 
-        mask = cv2.inRange(hsv, lower_tooth, upper_tooth)
+        _, binary = cv2.threshold(s_enhanced, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-        kernel = np.ones((7,7), np.uint8)
-        # Limpieza
-        binary_clean = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=3)
-        binary_clean = cv2.morphologyEx(binary_clean, cv2.MORPH_OPEN, kernel, iterations=3)
-
+        kernel = np.ones((5,5), np.uint8)
+        binary_clean = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel, iterations=2)
+        binary_clean = cv2.morphologyEx(binary_clean, cv2.MORPH_CLOSE, kernel, iterations=2)
         self.binary_mask = binary_clean
 
-        # --- VISUALIZACIÓN CON CUADRÍCULA ---
-        
-        # 1. Panel Izquierdo: Original + Grid Gris
-        # IMPORTANTE: Asegúrate de que esta línea esté alineada con las de arriba
-        original_grid = self.draw_grid(self.original_cv_image, color=(150, 150, 150))
-        self.show_image(original_grid, self.lbl_original)
+        view_original = self.draw_grid(self.original_cv_image, color=(100,100,100))
+        self.show_image(view_original, self.lbl_original)
 
-        # 2. Panel Derecho: Máscara B/N + Grid Gris
-        binary_bgr = cv2.cvtColor(self.binary_mask, cv2.COLOR_GRAY2BGR)
-        
-        binary_grid = self.draw_grid(binary_bgr, color=(150, 150, 150))
-        
-        self.show_image(binary_grid, self.lbl_binary)
+        binary_bgr = cv2.cvtColor(binary_clean, cv2.COLOR_GRAY2BGR)
+        view_result = self.draw_grid(binary_bgr, color=(100,100,100))
+        self.show_image(view_result, self.lbl_binary)
 
     def show_image(self, cv_img, label_widget, is_gray=False):
         if is_gray:

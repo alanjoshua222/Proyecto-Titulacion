@@ -116,54 +116,35 @@ class DentalAnalyzerApp:
         self.create_tooth_mask(self.original_cv_image)
 
     def create_tooth_mask(self, img):
-    # --- 1. SUAVIZADO ---
+        # 1. Lógica de Detección (Tu código)
         blurred = cv2.GaussianBlur(img, (5,5), 0)
-
-    # --- 2. HSV PARA DETECTAR DIENTES ---
         hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
 
-        lower_tooth = np.array([0, 0, 120])
-        upper_tooth = np.array([180, 60, 255])
+        lower_tooth = np.array([0,0,100])
+        upper_tooth = np.array([180,130,255])
+
         mask = cv2.inRange(hsv, lower_tooth, upper_tooth)
 
-    # --- 3. LIMPIEZA ---
-        kernel = np.ones((7,7), np.uint8)
+        kernel = np.ones((3,3), np.uint8)
+        # Limpieza
         binary_clean = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=3)
-        binary_clean = cv2.morphologyEx(binary_clean, cv2.MORPH_OPEN, kernel, iterations=3)
+        binary_clean = cv2.morphologyEx(binary_clean, cv2.MORPH_OPEN, kernel, iterations=1)
 
         self.binary_mask = binary_clean
 
-    # --- 4. FILTRO YCrCb ---
-        ycrcb = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
-        mask_skin = cv2.inRange(ycrcb, np.array([0,135,85]), np.array([255,180,135]))
-        mask_no_skin = cv2.bitwise_not(mask_skin)
-        mask_tooth = cv2.bitwise_and(binary_clean, binary_clean, mask=mask_no_skin)
-
-    # --- 5. FILTRO POR CONTORNOS ---
-        contours, _ = cv2.findContours(mask_tooth, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        final_mask = np.zeros_like(mask_tooth)
-
-        for cnt in contours:
-            area = cv2.contourArea(cnt)
-            if area < 300:
-                continue
-
-            hull = cv2.convexHull(cnt)
-            solidity = float(area) / cv2.contourArea(hull)
-            if solidity > 0.8:
-                cv2.drawContours(final_mask, [cnt], -1, 255, -1)
-
-        self.binary_mask = final_mask
-
-    # --- 6. VISUALIZACIÓN ---
-        original_grid = self.draw_grid(self.original_cv_image, color=(150,150,150))
+        # --- VISUALIZACIÓN CON CUADRÍCULA ---
+        
+        # 1. Panel Izquierdo: Original + Grid Gris
+        # IMPORTANTE: Asegúrate de que esta línea esté alineada con las de arriba
+        original_grid = self.draw_grid(self.original_cv_image, color=(150, 150, 150))
         self.show_image(original_grid, self.lbl_original)
 
+        # 2. Panel Derecho: Máscara B/N + Grid Gris
         binary_bgr = cv2.cvtColor(self.binary_mask, cv2.COLOR_GRAY2BGR)
-        binary_grid = self.draw_grid(binary_bgr, color=(150,150,150))
+        
+        binary_grid = self.draw_grid(binary_bgr, color=(150, 150, 150))
+        
         self.show_image(binary_grid, self.lbl_binary)
-
-
 
     def show_image(self, cv_img, label_widget, is_gray=False):
         if is_gray:

@@ -130,26 +130,27 @@ class DentalAnalyzerApp:
 
         mask_combined = cv2.bitwise_or(mask_white, mask_yellow)
 
-        kernel = np.ones((10,10), np.uint8)
+        kernel = np.ones((9,9), np.uint8)
     
         binary_clean = cv2.morphologyEx(mask_combined, cv2.MORPH_CLOSE, kernel, iterations=3)
-        binary_clean = cv2.morphologyEx(binary_clean, cv2.MORPH_OPEN, kernel, iterations=1)
+        binary_clean = cv2.morphologyEx(binary_clean, cv2.MORPH_OPEN, kernel, iterations=3)
 
-        self.binary_mask = binary_clean
+        contours, _ = cv2.findContours(binary_clean, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        final_mask = np.zeros_like(binary_clean)
 
-        # --- VISUALIZACIÓN CON CUADRÍCULA ---
-        
-        # 1. Panel Izquierdo: Original + Grid Gris
-        # IMPORTANTE: Asegúrate de que esta línea esté alineada con las de arriba
+        if contours:
+            largest_contour = max(contours, key=cv2.contourArea)
+            if cv2.contourArea(largest_contour) > 5000:
+                cv2.drawContours(final_mask, [largest_contour], -1, 255, thickness=cv2.FILLED)
+
+        self.binary_mask = final_mask
+
         original_grid = self.draw_grid(self.original_cv_image, color=(150, 150, 150))
         self.show_image(original_grid, self.lbl_original)
 
-        # 2. Panel Derecho: Máscara B/N + Grid Gris
-        binary_bgr = cv2.cvtColor(self.binary_mask, cv2.COLOR_GRAY2BGR)
-        
-        binary_grid = self.draw_grid(binary_bgr, color=(150, 150, 150))
-        
-        self.show_image(binary_grid, self.lbl_binary)
+        tooth_cutout_grid = cv2.bitwise_and(self.original_cv_image, self.original_cv_image, mask=self.binary_mask)
+        tooth_cutout_grid = self.draw_grid(tooth_cutout_grid, color=(150, 150, 150))        
+        self.show_image(tooth_cutout_grid, self.lbl_binary)
 
     def show_image(self, cv_img, label_widget, is_gray=False):
         if is_gray:

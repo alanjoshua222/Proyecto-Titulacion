@@ -1,0 +1,3 @@
+Opencv-python
+numpy
+pillow

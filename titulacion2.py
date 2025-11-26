@@ -82,6 +82,20 @@ class DentalAnalyzerApp:
         self.lbl_binary = tk.Label(self.content_frame, text="Análisis", bg="black", fg="white")
         self.lbl_binary.pack(side=tk.RIGHT, expand=True, fill=tk.BOTH, padx=5)
 
+    def calculate_grade(self, percentage):
+        if percentage == 0:
+            return "Grado 0", (0,255,0)
+        elif percentage < 25:
+            return "Grado 1", (50,205,255)
+        elif percentage < 25:
+            return "Grado 2", (0,255,255)
+        elif percentage < 25:
+            return "Grado 3", (0,165,255)
+        elif percentage < 25:
+            return "Grado 4", (0,69,255)
+        else:
+            return "Grado 5", (0,0,255)
+
     def sidebar(self):
         if self.sidebar_visible:
             self.sidebar_frame.pack_forget()
@@ -211,6 +225,8 @@ class DentalAnalyzerApp:
         contours, _ = cv2.findContours(binary_clean, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         final_mask = np.zeros_like(binary_clean)
 
+        tooth_area = 0
+
         if contours:
             largest_contour = max(contours, key=cv2.contourArea)
             if cv2.contourArea(largest_contour) > 5000:
@@ -237,6 +253,18 @@ class DentalAnalyzerApp:
         cv2.drawContours(tooth_cutout_grid, contours_plaque, -1, (255,255,0), 2)
         result_grid = self.draw_grid(tooth_cutout_grid, color=(150,150,150))
         
+        plaque_percent = 0
+        if tooth_area > 0:
+            plaque_percent = (total_plaque_area / tooth_area) * 100
+
+        grade_text, grade_color = self.calculate_grade(plaque_percent)
+
+        info_text = f"Análisis Completo\nPlaca: {plaque_percent:.2f}%\nDiagnóstico: {grade_text}"
+        self.lbl_binary.config(text=info_text)
+
+        cv2.putText(result_grid, f"Placa: {plaque_percent:.1f}%", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,255), 2)
+        cv2.putText(result_grid, f"{grade_text}", (20, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, grade_color, 2)
+
         self.processed_image = result_grid
         self.show_image(result_grid, self.lbl_binary)
         self.btn_save.config(state=tk.NORMAL)

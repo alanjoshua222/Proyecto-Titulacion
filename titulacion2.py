@@ -14,6 +14,8 @@ class DentalAnalyzerApp:
 
         self.original_cv_image = None
         self.binary_mask = None
+        self.save_processed_image = None
+       
 
  
         top_frame = tk.Frame(root, bg="#34495e", pady=10)
@@ -21,7 +23,9 @@ class DentalAnalyzerApp:
 
         btn_style = {"font": ("Arial", 12, "bold"), "bg": "#2980b9", "fg": "white", "padx": 20}
         tk.Button(top_frame, text="📂 Cargar Imagen", command=self.load_image, **btn_style).pack(side=tk.LEFT, padx=20)
-
+        self.btn_save = tk.Button(top_frame, text="💾 Descargar Imagen", command=self.save_image, state=tk.DISABLED, **btn_style)
+        self.btn_save.pack(side=tk.LEFT, padx=20) 
+        
 
         img_frame = tk.Frame(root, bg="#2c3e50")
         img_frame.pack(expand=True, fill=tk.BOTH, padx=20, pady=20)
@@ -85,7 +89,7 @@ class DentalAnalyzerApp:
 
         return img_grid
     
-    def overlay_mask(slef, original, mask):
+    def overlay_mask(self, original, mask):
         red_layer = np.zeros_like(original)
         red_layer[:] = (0,0,255)
 
@@ -102,6 +106,8 @@ class DentalAnalyzerApp:
 
         img = cv2.imread(path)
         if img is None: return
+
+        self.btn_save.config(state=tk.DISABLED)
 
         self.original_cv_image = self.resize_with_padding(img, target_size=(640,480))
         self.create_tooth_mask(self.original_cv_image)
@@ -157,10 +163,13 @@ class DentalAnalyzerApp:
         self.show_image(original_grid, self.lbl_original)
 
         result_grid = self.draw_grid(tooth_cutout_grid, color=(150,150,150))
-        self.show_image(result_grid, self.lbl_binary)
-        
+        self.save_processed_image = result_grid
+
+
         self.show_image(result_grid, self.lbl_binary)
         print(f"Área de placa: {total_plaque_area} px")
+
+        self.btn_save(state=tk.NORMAL)
 
     def show_image(self, cv_img, label_widget, is_gray=False):
         if is_gray:
@@ -172,6 +181,18 @@ class DentalAnalyzerApp:
         img_tk = ImageTk.PhotoImage(img_pil)
         label_widget.config(image=img_tk, text="")
         label_widget.image = img_tk
+
+    def save_image(self):
+        if self.save_processed_image is None: 
+            messagebox.showwarning("Aviso", "No hay imagen procesada para guardar")
+            return
+
+        file_path = filedialog.asksaveasfilename(
+            defaultextension=".jpg",filetypes=[("JPEG files", "*.jpg"), ("PNG files", "*.png")],title="Guardar Resultado")
+
+        if file_path:
+            cv2.imwrite(file_path, self.save_processed_image)
+            messagebox.showinfo("Éxito", f"Imagen guardada en: \n{file_path}")
 
 if __name__ == "__main__":
     root = tk.Tk()

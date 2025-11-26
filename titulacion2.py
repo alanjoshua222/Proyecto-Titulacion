@@ -17,6 +17,7 @@ class DentalAnalyzerApp:
         self.processed_image = None
         self.binary_mask = None
         self.thumbnail_cache = [] # Para evitar que el recolector de basura borre las iconos
+        self.sidebar_visible = True
 
         # --- DISEÑO PRINCIPAL (LAYOUT) ---
         # 1. Marco Superior (Barra de Herramientas)
@@ -24,8 +25,10 @@ class DentalAnalyzerApp:
         top_bar.pack(side=tk.TOP, fill=tk.X)
 
         btn_style = {"font": ("Segoe UI", 10, "bold"), "bg": "#2980b9", "fg": "white", "padx": 15, "pady": 5}
-        
-        tk.Label(top_bar, text="🦷 Dental AI Analyzer", bg="#34495e", fg="white", font=("Segoe UI", 14, "bold")).pack(side=tk.LEFT, padx=20)
+        self.btn_toggle = tk.Button(top_bar, text="☰", command=self.sidebar,font=("Arial",14,"bold"),bg="#34495e",fg="white",borderwidth=0,activebackground="#2c3e50",activeforeground="white")
+        self.btn_toggle.pack(side=tk.LEFT, padx=10)                                    
+
+        tk.Label(top_bar, text="🦷 Deteccion de placa bacteriana", bg="#34495e", fg="white", font=("Segoe UI", 14, "bold")).pack(side=tk.LEFT, padx=20)
         
         # Botón para seleccionar carpeta
         tk.Button(top_bar, text="📂 Seleccionar Carpeta", command=self.select_folder, **btn_style).pack(side=tk.LEFT, padx=10)
@@ -37,21 +40,21 @@ class DentalAnalyzerApp:
         self.btn_save.pack(side=tk.RIGHT, padx=20, pady=10)
 
         # 2. Contenedor Principal (Divide Izquierda y Derecha)
-        main_container = tk.Frame(root, bg="#2c3e50")
-        main_container.pack(fill=tk.BOTH, expand=True)
+        self.main_container = tk.Frame(root, bg="#2c3e50")
+        self.main_container.pack(fill=tk.BOTH, expand=True)
 
         # --- PANEL IZQUIERDO: GALERÍA ---
-        self.sidebar_width = 280
-        sidebar_frame = tk.Frame(main_container, width=self.sidebar_width, bg="#233140")
-        sidebar_frame.pack(side=tk.LEFT, fill=tk.Y)
-        sidebar_frame.pack_propagate(False) # Evita que el frame se encoja
+        self.sidebar_width = 260
+        self.sidebar_frame = tk.Frame(self.main_container, width=self.sidebar_width, bg="#233140")
+        self.sidebar_frame.pack(side=tk.LEFT, fill=tk.Y)
+        self.sidebar_frame.pack_propagate(False) # Evita que el frame se encoja
 
         # Título de la galería
-        tk.Label(sidebar_frame, text="Galería de Pacientes", bg="#233140", fg="#bdc3c7").pack(pady=5)
+        tk.Label(self.sidebar_frame, text="Galería de Pacientes", bg="#233140", fg="#bdc3c7").pack(pady=5)
 
         # Configuración del Scroll para la Galería
-        self.canvas_gallery = Canvas(sidebar_frame, bg="#233140", highlightthickness=0)
-        self.scrollbar_gallery = Scrollbar(sidebar_frame, orient="vertical", command=self.canvas_gallery.yview)
+        self.canvas_gallery = Canvas(self.sidebar_frame, bg="#233140", highlightthickness=0)
+        self.scrollbar_gallery = Scrollbar(self.sidebar_frame, orient="vertical", command=self.canvas_gallery.yview)
         self.scrollable_frame = Frame(self.canvas_gallery, bg="#233140")
 
         self.scrollable_frame.bind(
@@ -69,19 +72,30 @@ class DentalAnalyzerApp:
         self.canvas_gallery.bind_all("<MouseWheel>", self._on_mousewheel)
 
         # --- PANEL DERECHO: VISUALIZACIÓN ---
-        content_frame = tk.Frame(main_container, bg="#2c3e50")
-        content_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=20, pady=20)
+        self.content_frame = tk.Frame(self.main_container, bg="#2c3e50")
+        self.content_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=20, pady=20)
 
         # Labels de imágenes
-        self.lbl_original = tk.Label(content_frame, text="Selecciona una imagen...", bg="black", fg="white")
+        self.lbl_original = tk.Label(self.content_frame, text="Selecciona una imagen...", bg="black", fg="white")
         self.lbl_original.pack(side=tk.LEFT, expand=True, fill=tk.BOTH, padx=5)
 
-        self.lbl_binary = tk.Label(content_frame, text="Análisis", bg="black", fg="white")
+        self.lbl_binary = tk.Label(self.content_frame, text="Análisis", bg="black", fg="white")
         self.lbl_binary.pack(side=tk.RIGHT, expand=True, fill=tk.BOTH, padx=5)
 
+    def sidebar(self):
+        if self.sidebar_visible:
+            self.sidebar_frame.pack_forget()
+            self.btn_toggle.config(bg="#233140")
+            self.sidebar_visible = False
+        else:
+            self.sidebar_frame.pack(side=tk.LEFT, fill=tk.Y, before=self.content_frame)
+            self.btn_toggle.config(bg="#34495e")
+            self.sidebar_visible = True
+            
 
     def _on_mousewheel(self, event):
-        self.canvas_gallery.yview_scroll(int(-1*(event.delta/120)), "units")
+        if self.sidebar_visible:
+            self.canvas_gallery.yview_scroll(int(-1*(event.delta/120)), "units")
 
     def select_folder(self):
         folder_path = filedialog.askdirectory()
@@ -144,8 +158,6 @@ class DentalAnalyzerApp:
         self.original_cv_image = self.resize_with_padding(img, target_size=(640,480))
         self.create_tooth_mask(self.original_cv_image)
 
-    # --- TUS FUNCIONES DE PROCESAMIENTO EXISTENTES (Sin cambios mayores) ---
-
     def resize_with_padding(self, img, target_size=(640, 480)):
         h, w = img.shape[:2]
         target_w, target_h = target_size
@@ -162,6 +174,7 @@ class DentalAnalyzerApp:
         h, w = img_grid.shape[:2]
         for x in range(0, w, grid_size): cv2.line(img_grid, (x,0), (x,h), color, 1)
         for y in range(0, h, grid_size): cv2.line(img_grid, (0,y), (w,y), color, 1)
+        cv2.rectangle(img_grid, (0, 0), (w-1, h-1), color, 2)
         return img_grid
 
     def load_image(self):
@@ -221,7 +234,7 @@ class DentalAnalyzerApp:
 
         total_plaque_area = sum(cv2.contourArea(c) for c in contours_plaque)
 
-        cv2.drawContours(tooth_cutout_grid, contours_plaque, -1, (0,255,255), 2)
+        cv2.drawContours(tooth_cutout_grid, contours_plaque, -1, (255,255,0), 2)
         result_grid = self.draw_grid(tooth_cutout_grid, color=(150,150,150))
         
         self.processed_image = result_grid

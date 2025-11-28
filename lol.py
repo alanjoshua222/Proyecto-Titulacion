@@ -8,267 +8,288 @@ import os
 class DentalAnalyzerApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Estación de Análisis Dental - Metodología QH-T")
-        self.root.geometry("1400x750") 
+        self.root.title("Estación de Análisis Dental - Versión Final")
+        self.root.geometry("1400x800") 
         self.root.configure(bg="#2c3e50")
 
-        # Variables de estado
+        # --- VARIABLES DE ESTADO ---
         self.original_cv_image = None
-        self.processed_image = None
-        self.binary_mask = None
-        self.thumbnail_cache = [] 
+        self.resized_cv_image = None    
+        self.final_result_image = None
+        
+        self.current_drawing = []       
+        self.teeth_rois = []            
+        
         self.sidebar_visible = True
+        self.thumbnail_cache = [] 
 
-        # --- DISEÑO PRINCIPAL (LAYOUT) ---
+        # Dimensiones del área de dibujo
+        self.canvas_width = 800
+        self.canvas_height = 600
+
+        # --- DISEÑO (LAYOUT) ---
         top_bar = tk.Frame(root, bg="#34495e", height=60)
         top_bar.pack(side=tk.TOP, fill=tk.X)
 
-        btn_style = {"font": ("Segoe UI", 10, "bold"), "bg": "#2980b9", "fg": "white", "padx": 15, "pady": 5}
+        btn_style = {"font": ("Segoe UI", 9, "bold"), "bg": "#2980b9", "fg": "white", "padx": 10, "pady": 2}
         
-        # Botón Hamburguesa
-        self.btn_toggle = tk.Button(top_bar, text="☰", command=self.sidebar,
-                                    font=("Arial",14,"bold"), bg="#34495e", fg="white",
-                                    borderwidth=0, activebackground="#2c3e50", activeforeground="white")
+        self.btn_toggle = tk.Button(top_bar, text="☰", command=self.sidebar, font=("Arial",14,"bold"), bg="#34495e", fg="white", bd=0)
         self.btn_toggle.pack(side=tk.LEFT, padx=10)                            
 
-        tk.Label(top_bar, text="🦷 Detección QH-T", bg="#34495e", fg="white", font=("Segoe UI", 14, "bold")).pack(side=tk.LEFT, padx=20)
+        tk.Label(top_bar, text="🦷 Análisis QH-T", bg="#34495e", fg="white", font=("Segoe UI", 12, "bold")).pack(side=tk.LEFT, padx=10)
         
-        # Botones de Carga
-        tk.Button(top_bar, text="📂 Carpeta", command=self.select_folder, **btn_style).pack(side=tk.LEFT, padx=10)
-        tk.Button(top_bar, text="📄 Imagen", command=self.load_image, **btn_style).pack(side=tk.LEFT, padx=5)
+        # --- BOTONES DE CARGA ---
+        # 1. Botón Carpeta
+        tk.Button(top_bar, text="📂 Carpeta", command=self.select_folder, **btn_style).pack(side=tk.LEFT, padx=5)
+        # 2. Botón Imagen Individual (NUEVO)
+        tk.Button(top_bar, text="📄 Cargar Imagen", command=self.load_single_image, **btn_style).pack(side=tk.LEFT, padx=5)
+        
+        # --- BOTONES DE EDICIÓN ---
+        tk.Button(top_bar, text="↩ Deshacer", command=self.undo_last_tooth, bg="#f39c12", fg="white", font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=10)
+        tk.Button(top_bar, text="🗑 Reiniciar", command=self.reset_selection, bg="#c0392b", fg="white", font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=5)
 
-        # Botón de Guardar
-        self.btn_save = tk.Button(top_bar, text="💾 Guardar", command=self.save_image, state=tk.DISABLED, **btn_style)
-        self.btn_save.pack(side=tk.RIGHT, padx=20, pady=10)
+        # Botón Analizar
+        self.btn_analyze = tk.Button(top_bar, text="⚡ ANALIZAR SELECCIÓN", command=self.run_analysis, state=tk.DISABLED, bg="#27ae60", fg="white", font=("Segoe UI", 10, "bold"), padx=15)
+        self.btn_analyze.pack(side=tk.LEFT, padx=20)
 
-        # 2. Contenedor Principal
+        # Botón Guardar
+        self.btn_save = tk.Button(top_bar, text="💾 Descargar", command=self.save_image, state=tk.DISABLED, **btn_style)
+        self.btn_save.pack(side=tk.RIGHT, padx=20)
+
+        # CONTENEDOR PRINCIPAL
         self.main_container = tk.Frame(root, bg="#2c3e50")
         self.main_container.pack(fill=tk.BOTH, expand=True)
 
-        # --- PANEL IZQUIERDO: GALERÍA ---
-        self.sidebar_width = 260
+        # PANEL IZQUIERDO (GALERÍA)
+        self.sidebar_width = 240
         self.sidebar_frame = tk.Frame(self.main_container, width=self.sidebar_width, bg="#233140")
         self.sidebar_frame.pack(side=tk.LEFT, fill=tk.Y)
         self.sidebar_frame.pack_propagate(False)
 
-        tk.Label(self.sidebar_frame, text="Galería de Pacientes", bg="#233140", fg="#bdc3c7").pack(pady=5)
-
-        # Scrollbar Galería
+        tk.Label(self.sidebar_frame, text="Galería", bg="#233140", fg="#bdc3c7").pack(pady=5)
+        
         self.canvas_gallery = Canvas(self.sidebar_frame, bg="#233140", highlightthickness=0)
         self.scrollbar_gallery = Scrollbar(self.sidebar_frame, orient="vertical", command=self.canvas_gallery.yview)
         self.scrollable_frame = Frame(self.canvas_gallery, bg="#233140")
-
-        self.scrollable_frame.bind(
-            "<Configure>",
-            lambda e: self.canvas_gallery.configure(scrollregion=self.canvas_gallery.bbox("all"))
-        )
-
+        self.scrollable_frame.bind("<Configure>", lambda e: self.canvas_gallery.configure(scrollregion=self.canvas_gallery.bbox("all")))
         self.canvas_gallery.create_window((0, 0), window=self.scrollable_frame, anchor="nw", width=self.sidebar_width-20)
         self.canvas_gallery.configure(yscrollcommand=self.scrollbar_gallery.set)
-
         self.canvas_gallery.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5)
         self.scrollbar_gallery.pack(side=tk.RIGHT, fill=tk.Y)
         self.canvas_gallery.bind_all("<MouseWheel>", self._on_mousewheel)
 
-        # --- PANEL DERECHO: VISUALIZACIÓN ---
+        # PANEL DERECHO (CANVAS)
         self.content_frame = tk.Frame(self.main_container, bg="#2c3e50")
-        self.content_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=20, pady=20)
+        self.content_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        self.lbl_original = tk.Label(self.content_frame, text="Selecciona una imagen...", bg="black", fg="white")
-        self.lbl_original.pack(side=tk.LEFT, expand=True, fill=tk.BOTH, padx=5)
-
-        self.lbl_binary = tk.Label(self.content_frame, text="Análisis", bg="black", fg="white")
-        self.lbl_binary.pack(side=tk.RIGHT, expand=True, fill=tk.BOTH, padx=5)
-
-    # --- LÓGICA QH-T ---
-    def calculate_grade(self, percentage):
-        """Asigna el grado QH-T basado en el porcentaje"""
-        if percentage == 0:
-            return "Grado 0", (0, 255, 0) # Verde
-        elif percentage < 25:
-            return "Grado 1", (50, 205, 50) # Verde Lima
-        elif percentage < 40:
-            return "Grado 2", (0, 255, 255) # Amarillo
-        elif percentage < 60:
-            return "Grado 3", (0, 165, 255) # Naranja
-        elif percentage < 80:
-            return "Grado 4", (0, 69, 255)  # Naranja Rojizo
-        else:
-            return "Grado 5", (0, 0, 255)   # Rojo
-
-    def sidebar(self):
-        if self.sidebar_visible:
-            self.sidebar_frame.pack_forget()
-            self.btn_toggle.config(bg="#233140")
-            self.sidebar_visible = False
-        else:
-            self.sidebar_frame.pack(side=tk.LEFT, fill=tk.Y, before=self.content_frame)
-            self.btn_toggle.config(bg="#34495e")
-            self.sidebar_visible = True
-            
-    def _on_mousewheel(self, event):
-        if self.sidebar_visible:
-            self.canvas_gallery.yview_scroll(int(-1*(event.delta/120)), "units")
-
-    def select_folder(self):
-        folder_path = filedialog.askdirectory()
-        if not folder_path: return
-        self.load_gallery(folder_path)
-
-    def load_gallery(self, folder_path):
-        for widget in self.scrollable_frame.winfo_children():
-            widget.destroy()
-        self.thumbnail_cache = []
-
-        valid_extensions = ('.png', '.jpg', '.jpeg', '.bmp', '.tiff')
-        files = [f for f in os.listdir(folder_path) if f.lower().endswith(valid_extensions)]
+        self.canvas_draw = tk.Canvas(self.content_frame, bg="black", width=self.canvas_width, height=self.canvas_height, cursor="crosshair")
+        self.canvas_draw.pack(anchor=tk.CENTER, expand=True)
         
-        if not files:
-            tk.Label(self.scrollable_frame, text="No se encontraron imágenes", bg="#233140", fg="white").pack(pady=20)
+        self.canvas_draw.bind("<Button-1>", self.start_drawing)
+        self.canvas_draw.bind("<B1-Motion>", self.drawing_motion)
+        self.canvas_draw.bind("<ButtonRelease-1>", self.end_drawing)
+
+        self.lbl_info = tk.Label(self.content_frame, text="1. Carga Imagen  ->  2. Dibuja contorno  ->  3. Analizar", bg="#2c3e50", fg="yellow", font=("Arial", 10))
+        self.lbl_info.pack(pady=5)
+
+    # ------------------------------------------------------------------
+    # NUEVA FUNCION: CARGAR UNA SOLA IMAGEN
+    # ------------------------------------------------------------------
+    def load_single_image(self):
+        """Abre un diálogo para cargar una sola imagen externa"""
+        file_path = filedialog.askopenfilename(
+            title="Seleccionar Imagen Dental",
+            filetypes=[("Imágenes", "*.jpg *.jpeg *.png *.bmp *.tiff")]
+        )
+        if not file_path:
             return
+        
+        # Reutilizamos la lógica de procesamiento que ya tenemos
+        self.process_selected_image(file_path)
 
-        for filename in files:
-            full_path = os.path.join(folder_path, filename)
-            try:
-                pil_img = Image.open(full_path)
-                pil_img.thumbnail((200, 200))
-                tk_thumb = ImageTk.PhotoImage(pil_img)
-                self.thumbnail_cache.append(tk_thumb)
+    # ------------------------------------------------------------------
+    # LÓGICA DE DIBUJO (COORDENADAS FIJAS)
+    # ------------------------------------------------------------------
+    def is_inside_image(self, x, y):
+        if self.resized_cv_image is None: return False
+        h, w = self.resized_cv_image.shape[:2]
+        return 0 <= x < w and 0 <= y < h
 
-                card = tk.Frame(self.scrollable_frame, bg="#34495e", pady=5, padx=5)
-                card.pack(fill=tk.X, pady=5, padx=5)
+    def start_drawing(self, event):
+        if self.resized_cv_image is None: return
+        if self.is_inside_image(event.x, event.y):
+            self.current_drawing = [(event.x, event.y)]
 
-                btn = tk.Button(card, image=tk_thumb, bg="#2c3e50", borderwidth=0,
-                                command=lambda p=full_path: self.process_selected_image(p))
-                btn.pack()
+    def drawing_motion(self, event):
+        if self.resized_cv_image is None: return
+        h, w = self.resized_cv_image.shape[:2]
+        x = max(0, min(event.x, w-1))
+        y = max(0, min(event.y, h-1))
+        
+        if len(self.current_drawing) > 0:
+            prev_x, prev_y = self.current_drawing[-1]
+            self.canvas_draw.create_line(prev_x, prev_y, x, y, fill="#00ff00", width=2, tags="temp_line")
+        
+        self.current_drawing.append((x, y))
 
-                lbl = tk.Label(card, text=filename[:20], bg="#34495e", fg="white", font=("Arial", 8))
-                lbl.pack(fill=tk.X)
-            except Exception as e:
-                print(f"Error: {e}")
+    def end_drawing(self, event):
+        if self.resized_cv_image is None or len(self.current_drawing) < 5: return
+        
+        x_start, y_start = self.current_drawing[0]
+        x_end, y_end = self.current_drawing[-1]
+        self.canvas_draw.create_line(x_end, y_end, x_start, y_start, fill="#00ff00", width=2, tags="temp_line")
+        
+        self.teeth_rois.append(self.current_drawing)
+        
+        flat_points = [item for sublist in self.current_drawing for item in sublist]
+        self.canvas_draw.create_polygon(flat_points, outline="cyan", fill="", width=2, tags="saved_tooth")
+        
+        self.current_drawing = []
+        self.canvas_draw.delete("temp_line")
+        
+        self.btn_analyze.config(state=tk.NORMAL)
+        self.lbl_info.config(text=f"Dientes seleccionados: {len(self.teeth_rois)}")
 
+    def undo_last_tooth(self):
+        if self.teeth_rois:
+            self.teeth_rois.pop()
+            self.refresh_canvas_view()
+            self.lbl_info.config(text=f"Dientes seleccionados: {len(self.teeth_rois)}")
+
+    def reset_selection(self):
+        self.teeth_rois = []
+        self.current_drawing = []
+        self.refresh_canvas_view()
+        self.btn_analyze.config(state=tk.DISABLED)
+        self.lbl_info.config(text="Selección reiniciada.")
+
+    def refresh_canvas_view(self):
+        if self.resized_cv_image is None: return
+        self.canvas_draw.delete("all")
+        self.show_image_on_canvas(self.resized_cv_image)
+        for poly in self.teeth_rois:
+            flat_points = [item for sublist in poly for item in sublist]
+            self.canvas_draw.create_polygon(flat_points, outline="cyan", fill="", width=2, tags="saved_tooth")
+
+    # ------------------------------------------------------------------
+    # ANÁLISIS FIJO (PLACA DENTRO DE SELECCIÓN)
+    # ------------------------------------------------------------------
+    def run_analysis(self):
+        if self.resized_cv_image is None or not self.teeth_rois: return
+        
+        analysis_img = self.resized_cv_image.copy()
+        hsv_img = cv2.cvtColor(analysis_img, cv2.COLOR_BGR2HSV)
+        
+        lower_plaque = np.array([20, 50, 60])
+        upper_plaque = np.array([40, 255, 255])
+        
+        for idx, points in enumerate(self.teeth_rois):
+            tooth_mask = np.zeros(analysis_img.shape[:2], dtype=np.uint8)
+            pts_np = np.array(points, np.int32)
+            pts_np = pts_np.reshape((-1, 1, 2))
+            
+            cv2.fillPoly(tooth_mask, [pts_np], 255)
+            
+            tooth_area = cv2.countNonZero(tooth_mask)
+            
+            mask_plaque_global = cv2.inRange(hsv_img, lower_plaque, upper_plaque)
+            plaque_in_tooth = cv2.bitwise_and(mask_plaque_global, mask_plaque_global, mask=tooth_mask)
+            plaque_in_tooth = cv2.morphologyEx(plaque_in_tooth, cv2.MORPH_OPEN, np.ones((3,3), np.uint8))
+            
+            plaque_area = cv2.countNonZero(plaque_in_tooth)
+            
+            percent = (plaque_area / tooth_area * 100) if tooth_area > 0 else 0
+            grade_text, color_bgr = self.get_turesky_grade(percent)
+            
+            cv2.polylines(analysis_img, [pts_np], True, (255, 255, 0), 2)
+            contours_plaque, _ = cv2.findContours(plaque_in_tooth, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            cv2.drawContours(analysis_img, contours_plaque, -1, (0, 0, 255), 1)
+            
+            M = cv2.moments(pts_np)
+            cX = int(M["m10"] / M["m00"]) if M["m00"] != 0 else points[0][0]
+            cY = int(M["m01"] / M["m00"]) if M["m00"] != 0 else points[0][1]
+            
+            label = f"#{idx+1}: {grade_text} ({percent:.1f}%)"
+            (w_text, h_text), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+            cv2.rectangle(analysis_img, (cX - 10, cY - 20), (cX + w_text + 10, cY + 10), (0,0,0), -1)
+            cv2.putText(analysis_img, label, (cX - 5, cY), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color_bgr, 1)
+
+        self.final_result_image = analysis_img
+        self.show_image_on_canvas(self.final_result_image)
+        self.btn_save.config(state=tk.NORMAL)
+        messagebox.showinfo("Listo", "Análisis completado respetando selección.")
+
+    def get_turesky_grade(self, percentage):
+        if percentage == 0: return "Grado 0", (0, 255, 0)
+        elif percentage < 25: return "Grado 1", (0, 255, 255)
+        elif percentage < 40: return "Grado 2", (0, 165, 255)
+        elif percentage < 60: return "Grado 3", (0, 128, 255)
+        elif percentage < 80: return "Grado 4", (0, 0, 255)
+        else: return "Grado 5", (0, 0, 139)
+
+    # ------------------------------------------------------------------
+    # GESTIÓN IMÁGENES
+    # ------------------------------------------------------------------
     def process_selected_image(self, path):
         img = cv2.imread(path)
         if img is None: return
-        self.btn_save.config(state=tk.DISABLED)
-        self.original_cv_image = self.resize_with_padding(img, target_size=(640,480))
-        self.create_tooth_mask(self.original_cv_image)
+        
+        self.original_cv_image = img
+        self.resized_cv_image = self.resize_to_fit(img, self.canvas_width, self.canvas_height)
+        
+        self.reset_selection()
 
-    def resize_with_padding(self, img, target_size=(640, 480)):
+    def resize_to_fit(self, img, max_w, max_h):
         h, w = img.shape[:2]
-        target_w, target_h = target_size
-        scale = min(target_w / w, target_h / h)
-        new_w, new_h = int(w * scale), int(h * scale)
-        resized = cv2.resize(img, (new_w, new_h))
-        canvas = np.zeros((target_h, target_w, 3), dtype=np.uint8)
-        x_offset, y_offset = (target_w - new_w) // 2, (target_h - new_h) // 2
-        canvas[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized
-        return canvas
+        scale = min(max_w/w, max_h/h)
+        nw, nh = int(w*scale), int(h*scale)
+        return cv2.resize(img, (nw, nh))
 
-    def draw_grid(self, img, grid_size=40, color=(200,200,200)):
-        img_grid = img.copy()
-        h, w = img_grid.shape[:2]
-        # Líneas internas
-        for x in range(0, w, grid_size): cv2.line(img_grid, (x,0), (x,h), color, 1)
-        for y in range(0, h, grid_size): cv2.line(img_grid, (0,y), (w,y), color, 1)
-        # Borde externo (Solución al problema de bordes faltantes)
-        cv2.rectangle(img_grid, (0, 0), (w-1, h-1), color, 2)
-        return img_grid
-
-    def load_image(self):
-        path = filedialog.askopenfilename()
-        if not path: return
-        img = cv2.imread(path)
-        if img is None: return
-        self.btn_save.config(state=tk.DISABLED)
-        self.original_cv_image = self.resize_with_padding(img, target_size=(640,480))
-        self.create_tooth_mask(self.original_cv_image)
-
-    def create_tooth_mask(self, img):
-        blurred = cv2.GaussianBlur(img, (5,5), 0)
-        hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
-
-        # Rango de colores del diente
-        lower_white = np.array([0,0,60])
-        upper_white = np.array([180,90,255])
-        mask_white = cv2.inRange(hsv, lower_white, upper_white)
-
-        lower_yellow = np.array([20,50,50])
-        upper_yellow = np.array([40,255,255])
-        mask_yellow = cv2.inRange(hsv, lower_yellow, upper_yellow)
-        mask_combined = cv2.bitwise_or(mask_white, mask_yellow)
-
-        kernel = np.ones((9,9), np.uint8)
-        binary_clean = cv2.morphologyEx(mask_combined, cv2.MORPH_CLOSE, kernel, iterations=3)
-        binary_clean = cv2.morphologyEx(binary_clean, cv2.MORPH_OPEN, kernel, iterations=3)
-
-        contours, _ = cv2.findContours(binary_clean, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        final_mask = np.zeros_like(binary_clean)
-
-        # Variable para el área total del diente
-        tooth_area = 0
-
-        if contours:
-            largest_contour = max(contours, key=cv2.contourArea)
-            tooth_area = cv2.contourArea(largest_contour) # Obtenemos el área (100%)
-            if tooth_area > 5000:
-                cv2.drawContours(final_mask, [largest_contour], -1, 255, thickness=cv2.FILLED)
-
-        self.binary_mask = final_mask
-
-        # Mostrar Original con Grid
-        original_grid = self.draw_grid(self.original_cv_image, color=(150, 150, 150))
-        self.show_image(original_grid, self.lbl_original)
-
-        # Proceso final (Placa)
-        tooth_cutout_grid = cv2.bitwise_and(self.original_cv_image, self.original_cv_image, mask=self.binary_mask)
-        hsv_cutout = cv2.cvtColor(tooth_cutout_grid, cv2.COLOR_BGR2HSV)
-        
-        lower_plaque = np.array([20,50,80])
-        upper_plaque = np.array([35,255,220])
-        mask_plaque = cv2.inRange(hsv_cutout, lower_plaque, upper_plaque)
-        contours_plaque, _ = cv2.findContours(mask_plaque, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        total_plaque_area = sum(cv2.contourArea(c) for c in contours_plaque)
-
-        cv2.drawContours(tooth_cutout_grid, contours_plaque, -1, (0,255,255), 2)
-        result_grid = self.draw_grid(tooth_cutout_grid, color=(150,150,150))
-        
-        # --- CÁLCULO DE GRADOS (QH-T) ---
-        plaque_percent = 0
-        if tooth_area > 0:
-            plaque_percent = (total_plaque_area / tooth_area) * 100
-        
-        grade_text, grade_color = self.calculate_grade(plaque_percent)
-
-        # 1. Actualizar el Label de la interfaz
-        info_text = f"Análisis Completo\nPlaca: {plaque_percent:.2f}%\nDiagnóstico: {grade_text}"
-        self.lbl_binary.config(text=info_text)
-
-        # 2. Imprimir el diagnóstico EN LA IMAGEN (para que se descargue con ella)
-        # Fondo negro para el texto para legibilidad
-        cv2.rectangle(result_grid, (10, 10), (250, 80), (0,0,0), -1) 
-        cv2.putText(result_grid, f"Placa: {plaque_percent:.1f}%", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255,255,255), 2)
-        cv2.putText(result_grid, f"{grade_text}", (20, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, grade_color, 2)
-
-        self.processed_image = result_grid
-        self.show_image(result_grid, self.lbl_binary)
-        self.btn_save.config(state=tk.NORMAL)
-
-    def show_image(self, cv_img, label_widget, is_gray=False):
-        if is_gray: img_rgb = cv2.cvtColor(cv_img, cv2.COLOR_GRAY2RGB)
-        else: img_rgb = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
+    def show_image_on_canvas(self, cv_img):
+        img_rgb = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
         img_pil = Image.fromarray(img_rgb)
         img_tk = ImageTk.PhotoImage(img_pil)
-        label_widget.config(image=img_tk) # Quitamos text="" aquí porque lo manejamos dinámicamente
-        label_widget.image = img_tk
+        
+        self.canvas_draw.delete("all")
+        self.canvas_draw.create_image(0, 0, image=img_tk, anchor=tk.NW)
+        self.canvas_draw.image = img_tk 
+
+    # ------------------------------------------------------------------
+    # UTILIDADES
+    # ------------------------------------------------------------------
+    def select_folder(self):
+        p = filedialog.askdirectory()
+        if p: self.load_gallery(p)
+
+    def load_gallery(self, folder_path):
+        for w in self.scrollable_frame.winfo_children(): w.destroy()
+        self.thumbnail_cache = []
+        valid = ('.png', '.jpg', '.jpeg')
+        files = [f for f in os.listdir(folder_path) if f.lower().endswith(valid)]
+        if not files: tk.Label(self.scrollable_frame, text="Vacío", bg="#233140", fg="white").pack()
+        for f in files:
+            path = os.path.join(folder_path, f)
+            try:
+                im = Image.open(path)
+                im.thumbnail((180, 180))
+                ph = ImageTk.PhotoImage(im)
+                self.thumbnail_cache.append(ph)
+                fr = tk.Frame(self.scrollable_frame, bg="#34495e", pady=2)
+                fr.pack(fill=tk.X, pady=2, padx=5)
+                tk.Button(fr, image=ph, bg="#2c3e50", bd=0, command=lambda p=path: self.process_selected_image(p)).pack()
+            except: pass
 
     def save_image(self):
-        if self.processed_image is None: return
-        file_path = filedialog.asksaveasfilename(defaultextension=".jpg", filetypes=[("JPEG", "*.jpg"), ("PNG", "*.png")])
-        if file_path:
-            cv2.imwrite(file_path, self.processed_image)
-            messagebox.showinfo("Éxito", "Imagen con diagnóstico guardada")
+        if self.final_result_image is not None:
+            f = filedialog.asksaveasfilename(defaultextension=".jpg", filetypes=[("JPEG", "*.jpg")])
+            if f: cv2.imwrite(f, self.final_result_image); messagebox.showinfo("Guardado", "Imagen guardada.")
+
+    def sidebar(self):
+        if self.sidebar_visible: self.sidebar_frame.pack_forget(); self.sidebar_visible = False
+        else: self.sidebar_frame.pack(side=tk.LEFT, fill=tk.Y, before=self.content_frame); self.sidebar_visible = True
+
+    def _on_mousewheel(self, e):
+        if self.sidebar_visible: self.canvas_gallery.yview_scroll(int(-1*(e.delta/120)), "units")
 
 if __name__ == "__main__":
     root = tk.Tk()

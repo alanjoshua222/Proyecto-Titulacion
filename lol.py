@@ -8,7 +8,7 @@ import os
 class DentalAnalyzerApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Estación de Análisis Dental - Versión Final")
+        self.root.title("Deteccion de placa bacteriana")
         self.root.geometry("1400x800") 
         self.root.configure(bg="#2c3e50")
 
@@ -99,7 +99,7 @@ class DentalAnalyzerApp:
         """Abre un diálogo para cargar una sola imagen externa"""
         file_path = filedialog.askopenfilename(
             title="Seleccionar Imagen Dental",
-            filetypes=[("Imágenes", "*.jpg *.jpeg *.png *.bmp *.tiff")]
+            filetypes=[("Imágenes", "*.jpg *.jpeg *.png *.bmp *.tiff *.webp")]
         )
         if not file_path:
             return

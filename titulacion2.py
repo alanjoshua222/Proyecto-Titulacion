@@ -57,8 +57,8 @@ class DentalAnalyzerApp:
         # Botón manual de ajustes
         tk.Button(top_bar, text="⚙️ Panel de Ajustes", command=self.open_editor_window, bg="#34495e", fg="white", font=("Segoe UI", 9, "bold"), bd=1).pack(side=tk.LEFT, padx=10)
 
-        tk.Button(top_bar, text="↩ Borrar Sel.", command=self.delete_selected_tooth, bg="#f39c12", fg="white", font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=10)
-        tk.Button(top_bar, text="🗑 Reiniciar", command=self.reset_selection, bg="#c0392b", fg="white", font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=5)
+        tk.Button(top_bar, text="🗑 Eliminar", command=self.delete_selected_tooth, bg="#f39c12", fg="white", font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=10)
+        tk.Button(top_bar, text="↩ Reiniciar", command=self.reset_selection, bg="#c0392b", fg="white", font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=5)
 
         self.btn_save = tk.Button(top_bar, text="💾 Descargar", command=self.save_image, state=tk.DISABLED, **btn_style)
         self.btn_save.pack(side=tk.RIGHT, padx=20)
@@ -190,7 +190,7 @@ class DentalAnalyzerApp:
                 self.lbl_editor_title.config(text=f"EDITANDO DIENTE #{self.selected_tooth_idx + 1}", fg="#f1c40f")
                 self.editor_window.configure(bg="#2c3e50") 
             else:
-                self.lbl_editor_title.config(text="Editor de parametros", fg="white")
+                self.lbl_editor_title.config(text="Editor de parámetros", fg="white")
                 self.editor_window.configure(bg="#34495e") 
 
     def on_slider_change(self, val):

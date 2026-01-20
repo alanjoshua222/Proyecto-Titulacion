@@ -1,5 +1,5 @@
 ('C:\\Users\\alanj\\OneDrive\\Documentos\\Alan\\Octavo\\Titulacion\\dist\\Deteccion_de_placa.exe',
- False,
+ True,
  False,
  False,
  ['C:\\Users\\alanj\\OneDrive\\Documentos\\Alan\\Octavo\\Titulacion\\Logo-app.ico'],
@@ -3086,8 +3086,8 @@
  [],
  False,
  False,
- 1767583293,
- [('runw.exe',
-   'C:\\Users\\alanj\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\PyInstaller\\bootloader\\Windows-64bit-intel\\runw.exe',
+ 1767937551,
+ [('run.exe',
+   'C:\\Users\\alanj\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\PyInstaller\\bootloader\\Windows-64bit-intel\\run.exe',
    'EXECUTABLE')],
  'C:\\Users\\alanj\\AppData\\Local\\Programs\\Python\\Python313\\python313.dll')

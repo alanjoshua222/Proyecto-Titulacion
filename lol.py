@@ -8,40 +8,33 @@ import os
 class DentalAnalyzerApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("Estación de Análisis Dental - Edición Dinámica")
+        self.root.title("Deteccion de Biofilm dental")
         self.root.geometry("1400x850") 
         self.root.configure(bg="#2c3e50")
 
-        # --- VARIABLES DE ESTADO ---
         self.original_cv_image = None
         self.resized_cv_image = None    
         self.final_result_image = None
         
-        # Estructura de datos por diente:
-        # { 'points': [], 'glare': 225, 'sens': 0, 'percent': 0.0, 'grade': '', 'plaque_mask': ... }
         self.teeth_data = [] 
-        
         self.current_drawing = []       
-        self.selected_tooth_idx = None # Qué diente estamos editando
+        self.selected_tooth_idx = None 
         
         self.sidebar_visible = True
         self.thumbnail_cache = [] 
         self.canvas_width = 800
         self.canvas_height = 600
         
-        self.editor_window = None # Ventana flotante de edición
+        self.editor_window = None 
         self.offset_x = 0
         self.offset_y = 0
 
-        # Valores por defecto (Globales)
         self.default_glare = 225
         self.default_sens = 0
 
-        # Variables de Sliders (Vivas)
         self.var_glare = tk.IntVar(value=self.default_glare) 
         self.var_sens = tk.IntVar(value=self.default_sens)    
 
-        # --- UI SETUP ---
         top_bar = tk.Frame(root, bg="#34495e", height=60)
         top_bar.pack(side=tk.TOP, fill=tk.X)
 
@@ -50,25 +43,37 @@ class DentalAnalyzerApp:
         self.btn_toggle = tk.Button(top_bar, text="☰", command=self.sidebar, font=("Arial",14,"bold"), bg="#34495e", fg="white", bd=0)
         self.btn_toggle.pack(side=tk.LEFT, padx=10)                            
 
-        tk.Label(top_bar, text="🦷 Análisis Dinámico", bg="#34495e", fg="white", font=("Segoe UI", 12, "bold")).pack(side=tk.LEFT, padx=10)
+        tk.Label(top_bar, text="🦷 Deteccion de Biofilm dental", bg="#34495e", fg="white", font=("Segoe UI", 12, "bold")).pack(side=tk.LEFT, padx=10)
         
-        # Botones
-        tk.Button(top_bar, text="📂 Importar...", command=self.smart_import, **btn_style).pack(side=tk.LEFT, padx=10)
+        tk.Button(top_bar, text="📂 Importar...", command=self.smart_import, **btn_style).pack(side=tk.RIGHT, padx=10)
         
-        # Botón manual de ajustes (opcional, pues ahora se abre al hacer clic en diente)
-        tk.Button(top_bar, text="⚙️ Panel de Ajustes", command=self.open_editor_window, bg="#34495e", fg="white", font=("Segoe UI", 9, "bold"), bd=1).pack(side=tk.LEFT, padx=10)
-
-        tk.Button(top_bar, text="↩ Borrar Sel.", command=self.delete_selected_tooth, bg="#f39c12", fg="white", font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=10)
-        tk.Button(top_bar, text="🗑 Reiniciar", command=self.reset_selection, bg="#c0392b", fg="white", font=("Segoe UI", 9, "bold")).pack(side=tk.LEFT, padx=5)
-
+        
+        tk.Frame(top_bar, bg="#34495e", width=20).pack(side=tk.RIGHT)
+        
         self.btn_save = tk.Button(top_bar, text="💾 Descargar", command=self.save_image, state=tk.DISABLED, **btn_style)
-        self.btn_save.pack(side=tk.RIGHT, padx=20)
+        self.btn_save.pack(side=tk.RIGHT, padx=5)
+        
+       
+        self.btn_reset = tk.Button(top_bar, text="↩ Reiniciar", command=self.reset_selection, 
+                                  bg="#c0392b", fg="white", font=("Segoe UI", 9, "bold"))
+        self.btn_reset.pack(side=tk.LEFT, padx=5)
+        
+        self.btn_delete = tk.Button(top_bar, text="🗑 Eliminar", command=self.delete_selected_tooth, 
+                                   bg="#f39c12", fg="white", font=("Segoe UI", 9, "bold"))
+        self.btn_delete.pack(side=tk.LEFT, padx=5)
+        
+        self.btn_settings = tk.Button(top_bar, text="⚙️ Panel de Ajustes", command=self.open_editor_window, 
+                                     bg="#2980b9", fg="white", font=("Segoe UI", 9, "bold"), bd=1)
+        self.btn_settings.pack(side=tk.LEFT, padx=5)
+        
+       
+        self.btn_settings.pack_forget()
+        self.btn_delete.pack_forget()
+        self.btn_reset.pack_forget()
 
-        # --- LAYOUT PRINCIPAL ---
         self.main_container = tk.Frame(root, bg="#2c3e50")
         self.main_container.pack(fill=tk.BOTH, expand=True)
 
-        # SIDEBAR
         self.sidebar_width = 280
         self.sidebar_frame = tk.Frame(self.main_container, width=self.sidebar_width, bg="#233140")
         self.sidebar_frame.pack(side=tk.LEFT, fill=tk.Y)
@@ -88,24 +93,104 @@ class DentalAnalyzerApp:
         self.canvas_gallery.create_window((0, 0), window=self.scrollable_frame, anchor="nw", width=self.sidebar_width-20)
         self.canvas_gallery.bind_all("<MouseWheel>", self._on_mousewheel)
 
-        # CANVAS DERECHO
         self.content_frame = tk.Frame(self.main_container, bg="#2c3e50")
         self.content_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=10, pady=10)
         self.canvas_draw = tk.Canvas(self.content_frame, bg="black", width=self.canvas_width, height=self.canvas_height, cursor="crosshair")
         self.canvas_draw.pack(anchor=tk.CENTER, expand=True)
         
-        # EVENTOS CLAVE
-        self.canvas_draw.bind("<Button-1>", self.on_canvas_click) # Seleccionar o Empezar dibujo
+        self.canvas_draw.bind("<Button-1>", self.on_canvas_click)
         self.canvas_draw.bind("<B1-Motion>", self.drawing_motion)
         self.canvas_draw.bind("<ButtonRelease-1>", self.end_drawing)
 
-        self.lbl_info = tk.Label(self.content_frame, text="1. Dibuja un diente -> Se analiza automáticamente.\n2. Haz clic en el diente para corregir parámetros.", bg="#2c3e50", fg="yellow", font=("Arial", 10))
+        self.lbl_info = tk.Label(self.content_frame, text="Dibuje el perimetro del diente", bg="#2c3e50", fg="yellow", font=("Arial", 10))
         self.lbl_info.pack(pady=5)
 
-    # ------------------------------------------------------------------
-    # VENTANA DE EDICIÓN FLOTANTE (Se abre al hacer clic en un diente)
-    # ------------------------------------------------------------------
+    def show_action_buttons(self):
+        
+        if self.teeth_data:
+            self.btn_settings.pack(side=tk.RIGHT, padx=5)
+            self.btn_delete.pack(side=tk.RIGHT, padx=5)
+            self.btn_reset.pack(side=tk.RIGHT, padx=5)
+            
+            
+            if self.selected_tooth_idx is not None:
+                self.btn_settings.config(state=tk.NORMAL, bg="#2980b9")
+                self.btn_delete.config(state=tk.NORMAL)
+            else:
+                self.btn_settings.config(state=tk.NORMAL, bg="#2980b9")
+                self.btn_delete.config(state=tk.DISABLED)
+
+    def hide_action_buttons(self):
+        
+        self.btn_settings.pack_forget()
+        self.btn_delete.pack_forget()
+        self.btn_reset.pack_forget()
+
+    def close_editor_window(self):
+       
+        if self.editor_window is not None and self.editor_window.winfo_exists():
+            self.editor_window.destroy()
+            self.editor_window = None
+
+    def delete_selected_tooth(self):
+        
+        if self.selected_tooth_idx is not None:
+            del self.teeth_data[self.selected_tooth_idx]
+            self.selected_tooth_idx = None
+            
+            self.var_glare.set(self.default_glare)
+            self.var_sens.set(self.default_sens)
+            
+            self.close_editor_window()
+            
+            
+            if not self.teeth_data:
+                self.hide_action_buttons()
+                self.btn_save.config(state=tk.DISABLED)
+            else:
+                
+                self.btn_settings.config(state=tk.NORMAL)
+                self.btn_delete.config(state=tk.DISABLED)
+            
+            self.redraw_all()
+            self.lbl_info.config(text="Diente eliminado correctamente.")
+        else:
+            messagebox.showwarning("Atención", "Primero debe de seleccionar un diente")
+
+    def undo_last_tooth(self):
+        
+        if self.teeth_data:
+            self.teeth_data.pop()
+            self.selected_tooth_idx = None
+            
+            self.close_editor_window()
+            
+            
+            if not self.teeth_data:
+                self.hide_action_buttons()
+                self.btn_save.config(state=tk.DISABLED)
+            else:
+                
+                self.btn_settings.config(state=tk.NORMAL)
+                self.btn_delete.config(state=tk.DISABLED)
+
+            self.redraw_all()
+            self.lbl_info.config(text="Último diente deshecho.")
+
     def open_editor_window(self):
+        
+        if not self.teeth_data:
+            messagebox.showinfo("Información", "Primero debes dibujar un diente.")
+            return
+            
+        if self.selected_tooth_idx is None and self.teeth_data:
+            
+            self.selected_tooth_idx = len(self.teeth_data) - 1
+            tooth = self.teeth_data[self.selected_tooth_idx]
+            self.var_glare.set(tooth['glare'])
+            self.var_sens.set(tooth['sens'])
+            self.redraw_all()
+            
         if self.editor_window is not None and self.editor_window.winfo_exists():
             self.editor_window.lift()
             return
@@ -116,7 +201,9 @@ class DentalAnalyzerApp:
         self.editor_window.configure(bg="#34495e")
         self.editor_window.resizable(False, False)
         
-        # Posicionar cerca del mouse o centro
+        
+        self.editor_window.protocol("WM_DELETE_WINDOW", self.on_editor_close)
+
         try:
             x = self.root.winfo_x() + self.root.winfo_width() - 350
             y = self.root.winfo_y() + 150
@@ -126,93 +213,94 @@ class DentalAnalyzerApp:
         self.lbl_editor_title = tk.Label(self.editor_window, text="Configuración Global", bg="#34495e", fg="white", font=("Arial", 11, "bold"))
         self.lbl_editor_title.pack(pady=10)
 
-        # Slider 1: Glare
         tk.Label(self.editor_window, text="Límite de Brillo (Anti-Reflejos)", bg="#34495e", fg="#bdc3c7").pack(pady=(5,0))
         s_glare = Scale(self.editor_window, from_=150, to=255, orient=HORIZONTAL, bg="#34495e", fg="white", 
                         highlightthickness=0, variable=self.var_glare, command=self.on_slider_change)
         s_glare.pack(fill=tk.X, padx=20)
-        tk.Label(self.editor_window, text="(Bajar para borrar reflejos blancos)", bg="#34495e", fg="#7f8c8d", font=("Arial", 8)).pack()
 
-        # Slider 2: Sensibilidad
         tk.Label(self.editor_window, text="Sensibilidad a Placa", bg="#34495e", fg="#bdc3c7").pack(pady=(15,0))
         s_sens = Scale(self.editor_window, from_=-50, to=50, orient=HORIZONTAL, bg="#34495e", fg="white", 
                        highlightthickness=0, variable=self.var_sens, command=self.on_slider_change)
         s_sens.pack(fill=tk.X, padx=20)
-        tk.Label(self.editor_window, text="(Subir para detectar placa sutil)", bg="#34495e", fg="#7f8c8d", font=("Arial", 8)).pack()
+        
 
-        # Actualizar título si hay selección
         self.update_editor_title()
+
+    def on_editor_close(self):
+       
+       
+        if self.editor_window is not None and self.editor_window.winfo_exists():
+            self.editor_window.destroy()
+        
+        self.editor_window = None
 
     def update_editor_title(self):
         if self.editor_window and self.editor_window.winfo_exists():
             if self.selected_tooth_idx is not None:
-                self.lbl_editor_title.config(text=f"DIENTE #{self.selected_tooth_idx + 1}", fg="#f1c40f")
-                self.editor_window.configure(bg="#2c3e50") # Color normal
+                self.lbl_editor_title.config(text=f"EDITANDO DIENTE #{self.selected_tooth_idx + 1}", fg="#f1c40f")
+                self.editor_window.configure(bg="#2c3e50") 
             else:
-                self.lbl_editor_title.config(text="Configuración por Defecto", fg="white")
-                self.editor_window.configure(bg="#34495e") # Color diferente para distinguir
+                self.lbl_editor_title.config(text="Configuración Global", fg="white")
+                self.editor_window.configure(bg="#34495e") 
 
     def on_slider_change(self, val):
-        """Se ejecuta cada vez que mueves un slider"""
         if self.selected_tooth_idx is not None:
-            # 1. Guardar nuevos valores en el diente seleccionado
             self.teeth_data[self.selected_tooth_idx]['glare'] = self.var_glare.get()
             self.teeth_data[self.selected_tooth_idx]['sens'] = self.var_sens.get()
-            
-            # 2. RE-ANALIZAR solo ese diente en tiempo real
             self.run_single_analysis(self.selected_tooth_idx)
-            
-            # 3. Redibujar todo para ver cambios
             self.redraw_all()
         else:
-            # Si no hay diente seleccionado, guardamos como Defaults para el futuro
             self.default_glare = self.var_glare.get()
             self.default_sens = self.var_sens.get()
 
-    # ------------------------------------------------------------------
-    # INTERACCIÓN EN CANVAS (CLIC Y DIBUJO)
-    # ------------------------------------------------------------------
     def on_canvas_click(self, event):
         if self.resized_cv_image is None: return
 
-        # Verificar si dimos clic en un diente ya existente
         clicked_idx = self.check_click_on_tooth(event.x, event.y)
 
         if clicked_idx is not None:
-            # --- SELECCIONAMOS UN DIENTE ---
             self.selected_tooth_idx = clicked_idx
             
-            # Cargar los valores de ESE diente en los sliders
             tooth = self.teeth_data[clicked_idx]
             self.var_glare.set(tooth['glare'])
             self.var_sens.set(tooth['sens'])
             
-            # Abrir/Actualizar ventana de edición automáticamente
+            
             self.open_editor_window()
             self.update_editor_title()
             
-            self.lbl_info.config(text=f"Diente #{clicked_idx+1}. Mueve los sliders para corregir.")
+            
+            self.btn_settings.config(state=tk.NORMAL)
+            self.btn_delete.config(state=tk.NORMAL)
+            
+            self.lbl_info.config(text=f"Editando Diente #{clicked_idx+1}. Mueve los sliders para corregir.")
             self.redraw_all()
             
         else:
-            # --- CLIC FUERA (DESELECCIONAR O DIBUJAR) ---
             if self.selected_tooth_idx is not None:
                 self.selected_tooth_idx = None
                 self.update_editor_title()
-                # Regresar sliders a default
+               
                 self.var_glare.set(self.default_glare)
                 self.var_sens.set(self.default_sens)
+                
+              
+                self.btn_settings.config(state=tk.NORMAL)
+                self.btn_delete.config(state=tk.DISABLED)
+                
+                
+              
+                if self.editor_window is not None and self.editor_window.winfo_exists():
+                    self.update_editor_title()
+                
                 self.redraw_all()
                 self.lbl_info.config(text="Modo Dibujo. Traza el siguiente diente.")
             
-            # Iniciar dibujo
             if self.is_inside_image(event.x, event.y):
                 self.current_drawing = [(event.x, event.y)]
 
     def check_click_on_tooth(self, x, y):
-        # Traducir click de canvas a imagen real
         click_pt = (x - self.offset_x, y - self.offset_y)
-        # Revisar en orden inverso (del último dibujado al primero)
         for i in range(len(self.teeth_data)-1, -1, -1):
             pts = np.array(self.teeth_data[i]['points'], np.int32)
             if cv2.pointPolygonTest(pts, click_pt, False) >= 0:
@@ -236,12 +324,9 @@ class DentalAnalyzerApp:
             self.canvas_draw.delete("temp_line")
             return
 
-        self.drawing_motion(event) # Cerrar
-        
-        # Guardar coordenadas (relativas a la imagen)
+        self.drawing_motion(event)
         pts_img = [(p[0] - self.offset_x, p[1] - self.offset_y) for p in self.current_drawing]
         
-        # CREAR DIENTE CON VALORES ACTUALES (DEFAULTS)
         new_tooth = {
             'points': pts_img,
             'glare': self.default_glare,
@@ -250,29 +335,39 @@ class DentalAnalyzerApp:
             'grade': '...'
         }
         self.teeth_data.append(new_tooth)
-        
-        # --- ANÁLISIS AUTOMÁTICO INMEDIATO ---
         self.run_single_analysis(len(self.teeth_data)-1)
         
         self.current_drawing = []
         self.canvas_draw.delete("temp_line")
-        
         self.btn_save.config(state=tk.NORMAL)
+        
+        
+        self.show_action_buttons()
+        
+        
+        self.selected_tooth_idx = len(self.teeth_data) - 1
+        tooth = self.teeth_data[self.selected_tooth_idx]
+        self.var_glare.set(tooth['glare'])
+        self.var_sens.set(tooth['sens'])
+        
+        
+        self.open_editor_window()
+        self.update_editor_title()
+        
+        
+        self.btn_settings.config(state=tk.NORMAL)
+        self.btn_delete.config(state=tk.NORMAL)
+        
         self.redraw_all()
-        self.lbl_info.config(text="Si el resultado no es preciso, haz clic en él para editar.")
+        self.lbl_info.config(text=f"Diente #{len(self.teeth_data)} analizado. Ajusta los parámetros si es necesario.")
 
-    # ------------------------------------------------------------------
-    # MOTOR DE ANÁLISIS (INDIVIDUAL)
-    # ------------------------------------------------------------------
     def run_single_analysis(self, idx):
         if self.resized_cv_image is None: return
         tooth = self.teeth_data[idx]
         pts_np = np.array(tooth['points'], np.int32)
         
-        # Motor de detección usando los parámetros específicos de ESTE diente
         mask = self.detect_plaque_engine(self.resized_cv_image, pts_np, tooth['glare'], tooth['sens'])
         
-        # Calcular áreas
         tooth_mask = np.zeros(self.resized_cv_image.shape[:2], dtype=np.uint8)
         cv2.fillPoly(tooth_mask, [pts_np.reshape((-1, 1, 2))], 255)
         
@@ -282,14 +377,12 @@ class DentalAnalyzerApp:
         percent = (plaque_area / tooth_area * 100) if tooth_area > 0 else 0
         grade, color = self.get_turesky_grade(percent)
         
-        # Guardar en memoria
         tooth['percent'] = percent
         tooth['grade'] = grade
         tooth['color'] = color
         tooth['plaque_mask'] = mask
 
     def detect_plaque_engine(self, img, pts, glare_lim, sens_offset):
-        """Algoritmo Híbrido: LAB + CLAHE + OTSU Adaptativo"""
         mask_tooth = np.zeros(img.shape[:2], dtype=np.uint8)
         cv2.fillPoly(mask_tooth, [pts.reshape((-1, 1, 2))], 255)
         
@@ -298,16 +391,13 @@ class DentalAnalyzerApp:
         
         roi = img[y:y+h, x:x+w]
         roi_mask = mask_tooth[y:y+h, x:x+w]
-        
         if roi.size == 0: return np.zeros(img.shape[:2], dtype=np.uint8)
 
         lab = cv2.cvtColor(roi, cv2.COLOR_BGR2LAB)
         l, a, b = cv2.split(lab)
 
-        # Anti-Reflejos
         _, mask_glare = cv2.threshold(l, glare_lim, 255, cv2.THRESH_BINARY)
         
-        # Detección Placa (Canal B)
         clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
         b_enhanced = clahe.apply(b)
         
@@ -315,14 +405,11 @@ class DentalAnalyzerApp:
         if len(valid_px) == 0: return np.zeros(img.shape[:2], dtype=np.uint8)
 
         otsu, _ = cv2.threshold(valid_px, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        
-        # Ajuste de Sensibilidad (Otsu - offset)
         final_thresh = max(0, min(255, otsu - sens_offset))
         
         _, mask_plaque = cv2.threshold(b_enhanced, final_thresh, 255, cv2.THRESH_BINARY)
         _, mask_gum = cv2.threshold(a, 145, 255, cv2.THRESH_BINARY)
         
-        # Filtrado
         mask_plaque = cv2.bitwise_and(mask_plaque, cv2.bitwise_not(mask_gum))
         mask_plaque = cv2.bitwise_and(mask_plaque, cv2.bitwise_not(mask_glare))
         mask_plaque = cv2.bitwise_and(mask_plaque, mask_plaque, mask=roi_mask)
@@ -335,24 +422,20 @@ class DentalAnalyzerApp:
         if self.resized_cv_image is None: return
         self.canvas_draw.delete("all")
         
-        # Imagen base
         display_img = self.resized_cv_image.copy()
         
         for i, tooth in enumerate(self.teeth_data):
             pts_np = np.array(tooth['points'], np.int32).reshape((-1, 1, 2))
             
-            # Borde: Amarillo si seleccionado, Cyan si no
             color = (0, 255, 255) if i == self.selected_tooth_idx else (255, 255, 0)
             thick = 3 if i == self.selected_tooth_idx else 2
             
             cv2.polylines(display_img, [pts_np], True, color, thick)
             
-            # Placa
             if 'plaque_mask' in tooth:
                 cnts, _ = cv2.findContours(tooth['plaque_mask'], cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                cv2.drawContours(display_img, cnts, -1, (0, 0, 255), 1)
+                cv2.drawContours(display_img, cnts, -1, (0, 0, 255), 2)
             
-            # Texto
             if 'percent' in tooth:
                 M = cv2.moments(pts_np)
                 cx = int(M["m10"]/M["m00"]) if M["m00"]!=0 else tooth['points'][0][0]
@@ -364,36 +447,21 @@ class DentalAnalyzerApp:
                 cv2.putText(display_img, txt, (cx-5, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.5, tooth['color'], 1)
 
         self.final_result_image = display_img
-        
-        # Mostrar en Canvas
         i = cv2.cvtColor(display_img, cv2.COLOR_BGR2RGB)
         itk = ImageTk.PhotoImage(Image.fromarray(i))
         self.canvas_draw.create_image(self.offset_x, self.offset_y, image=itk, anchor=tk.NW)
         self.canvas_draw.image = itk 
 
-    # ------------------------------------------------------------------
-    # UTILIDADES
-    # ------------------------------------------------------------------
-    def delete_selected_tooth(self):
-        if self.selected_tooth_idx is not None:
-            del self.teeth_data[self.selected_tooth_idx]
-            self.selected_tooth_idx = None
-            self.redraw_all()
-            self.update_editor_title()
-        else:
-            messagebox.showwarning('¡Advertencia!','Debe de seleccionar el área a eliminar')
-
-    def undo_last_tooth(self):
-        if self.teeth_data:
-            self.teeth_data.pop()
-            self.selected_tooth_idx = None
-            self.redraw_all()
-
     def reset_selection(self):
         self.teeth_data = []
         self.selected_tooth_idx = None
-        self.redraw_all()
+        
+        self.close_editor_window()
+        self.hide_action_buttons()
+        
         self.btn_save.config(state=tk.DISABLED)
+        self.redraw_all()
+        self.lbl_info.config(text="Selección reiniciada. Puedes dibujar nuevos dientes.")
 
     def process_selected_image(self, path):
         img = cv2.imread(path)
@@ -405,9 +473,12 @@ class DentalAnalyzerApp:
         self.offset_x = (self.canvas_width - self.resized_cv_image.shape[1]) // 2
         self.offset_y = (self.canvas_height - self.resized_cv_image.shape[0]) // 2
         
-        # Resetear variables
         self.teeth_data = []
         self.selected_tooth_idx = None
+        
+        self.close_editor_window()
+        self.hide_action_buttons()
+
         self.default_glare = 225
         self.default_sens = 0
         self.var_glare.set(225)
@@ -450,7 +521,7 @@ class DentalAnalyzerApp:
     def save_image(self):
         if self.final_result_image is not None:
             f = filedialog.asksaveasfilename(defaultextension=".jpg", filetypes=[("JPEG", "*.jpg")])
-            if f: cv2.imwrite(f, self.final_result_image); messagebox.showinfo("Guardado", "Listo.")
+            if f: cv2.imwrite(f, self.final_result_image)
     
     def is_inside_image(self, x, y):
         if self.resized_cv_image is None: return False

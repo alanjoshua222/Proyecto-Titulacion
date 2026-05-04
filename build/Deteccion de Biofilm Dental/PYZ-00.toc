@@ -1,5 +1,5 @@
-('C:\\Users\\alanj\\OneDrive\\Documentos\\Alan\\Octavo\\Titulacion\\build\\Deteccion '
- 'de Biofilm Dental\\PYZ-00.pyz',
+('C:\\Users\\alanj\\OneDrive\\Documentos\\Alan\\Octavo\\Titulacion\\build\\DETECCION '
+ 'DE BIOFILM DENTAL\\PYZ-00.pyz',
  [('PIL',
    'C:\\Users\\alanj\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\PIL\\__init__.py',
    'PYMODULE'),

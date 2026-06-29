@@ -101,7 +101,7 @@ class DentalAnalyzerApp:
 
         self.lbl_info = tk.Label(self.content_frame, text="Dibuje el perimetro del diente", bg="#2c3e50", fg="yellow", font=("Arial", 10))
         self.lbl_info.pack(pady=5)
-
+ 
     def show_action_buttons(self):
         if self.teeth_data:
             self.btn_settings.pack(side=tk.RIGHT, padx=5)
@@ -181,7 +181,7 @@ class DentalAnalyzerApp:
         s_sens = Scale(self.editor_window, from_=-50, to=50, orient=HORIZONTAL, bg="#34495e", fg="white", highlightthickness=0, variable=self.var_sens, command=self.on_slider_change)
         s_sens.pack(fill=tk.X, padx=20)
         self.update_editor_title()
-
+ 
     def on_editor_close(self):
         if self.editor_window is not None and self.editor_window.winfo_exists():
             self.editor_window.destroy()
@@ -369,14 +369,14 @@ class DentalAnalyzerApp:
             cv2.polylines(display_img, [pts_np], True, color, thick)
             if 'plaque_mask' in tooth:
                 cnts, _ = cv2.findContours(tooth['plaque_mask'], cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                cv2.drawContours(display_img, cnts, -1, (0, 0, 255), 2)
+                cv2.drawContours(display_img, cnts, -1, (0, 0, 255), -1)
             if 'percent' in tooth:
                 M = cv2.moments(pts_np)
                 cx = int(M["m10"]/M["m00"]) if M["m00"]!=0 else tooth['points'][0][0]
                 cy = int(M["m01"]/M["m00"]) if M["m00"]!=0 else tooth['points'][0][1]
                 txt = f"#{i+1} {tooth['grade']} ({tooth['percent']:.1f}%)"
                 (w, h), _ = cv2.getTextSize(txt, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
-                cv2.rectangle(display_img, (cx-10, cy-20), (cx+w+10, cy+10), (0,0,0), -1)
+                cv2.rectangle(display_img, (cx-10, cy-20), (cx+w+10, cy+10), (255,255,255), -1)
                 cv2.putText(display_img, txt, (cx-5, cy), cv2.FONT_HERSHEY_SIMPLEX, 0.5, tooth['color'], 1)
         self.final_result_image = display_img
         i = cv2.cvtColor(display_img, cv2.COLOR_BGR2RGB)
@@ -424,7 +424,8 @@ class DentalAnalyzerApp:
         if fs: self.process_import_list(list(fs))
     def import_folder_logic(self):
         d = filedialog.askdirectory()
-        if d: self.process_import_list([os.path.join(d,f) for f in os.listdir(d) if f.lower().endswith(('.jpg','.png','.jpeg','.webp'))])
+        if d: self.process_import_list([os.path.join(d,f) for f in os.listdir(d)
+         if f.lower().endswith(('.jpg','.png','.jpeg','.webp'))])
     def process_import_list(self, fs):
         for w in self.scrollable_frame.winfo_children(): w.destroy()
         self.thumbnail_cache = []
@@ -438,12 +439,12 @@ class DentalAnalyzerApp:
         if fs: self.process_selected_image(fs[0])
 
     def get_turesky_grade(self, p):
-        if p == 0: return "Grado 0", (0, 255, 0)
-        elif p < 21: return "Grado 1", (0, 255, 255)
-        elif p < 41: return "Grado 2", (0, 165, 255)
-        elif p < 61: return "Grado 3", (0, 128, 255)
-        elif p < 81: return "Grado 4", (0, 0, 255)
-        else: return "Grado 5", (0, 0, 139)
+        if p == 0: return "Grado 0", (0, 0, 0)
+        elif p < 21: return "Grado 1", (0, 0, 0)
+        elif p < 41: return "Grado 2", (0, 0, 0)
+        elif p < 61: return "Grado 3", (0, 0, 0)
+        elif p < 81: return "Grado 4", (0, 0, 0)
+        else: return "Grado 5", (0, 0, 0)
 
     def save_image(self):
         if self.final_result_image is not None:
